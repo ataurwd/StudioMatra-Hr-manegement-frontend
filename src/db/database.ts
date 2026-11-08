@@ -475,7 +475,10 @@ class StudioMatraDatabase {
 
     // Asynchronously update remote MySQL database
     if (typeof window !== 'undefined') {
-      fetch(`/api/employees/${employeeId}/pin`, {
+      const apiBase = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL)
+        ? ((import.meta as any).env.VITE_API_URL as string).replace(/\/$/, '')
+        : '/api';
+      fetch(`${apiBase}/employees/${employeeId}/pin`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pinCode: newPin, actorRole: actor.role }),

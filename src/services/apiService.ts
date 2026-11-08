@@ -1,7 +1,9 @@
 import { db } from '../db/database';
 import { Employee, LeaveBalance, User } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL)
+  ? ((import.meta as any).env.VITE_API_URL as string).replace(/\/$/, '')
+  : '/api';
 
 export interface HealthResponse {
   status: string;
