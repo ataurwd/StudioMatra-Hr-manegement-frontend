@@ -43,7 +43,7 @@ export const Sidebar: React.FC = () => {
     },
     {
       to: '/staff-attendance',
-      label: 'Staff Monthly Attendance',
+      label: 'Staff Attendance',
       icon: CalendarCheck,
       show: currentRole === 'super_admin',
       badge: 'Super Admin',
@@ -197,14 +197,14 @@ export const Sidebar: React.FC = () => {
                 >
                   {({ isActive }) => (
                     <>
-                      <div className="flex items-center gap-2.5">
-                        <Icon className={`w-4 h-4 ${isActive ? 'text-[#171c1b]' : 'text-[#CAA05C]'}`} />
-                        <span>{item.label}</span>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#171c1b]' : 'text-[#CAA05C]'}`} />
+                        <span className="truncate whitespace-nowrap">{item.label}</span>
                       </div>
                       {item.badge && (
                         <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                            isActive ? 'bg-[#171c1b] text-[#CAA05C]' : 'bg-[#242b29] text-[#CAA05C]'
+                          className={`text-[9.5px] px-1.5 py-0.5 rounded font-mono font-bold tracking-wider uppercase shrink-0 whitespace-nowrap ml-2 ${
+                            isActive ? 'bg-[#171c1b] text-[#CAA05C]' : 'bg-[#242b29] text-[#CAA05C] border border-[#CAA05C]/20'
                           }`}
                         >
                           {item.badge}
