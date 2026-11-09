@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { apiGetUsers } from '../services/apiService';
 
 export const LoginPage: React.FC = () => {
   const { isAuthenticated, login, users } = useAppContext();
@@ -23,19 +24,31 @@ export const LoginPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showDemoAccounts, setShowDemoAccounts] = useState(false);
+  const [liveUsers, setLiveUsers] = useState(users);
+
+  // Fetch live accounts from MySQL directly
+  useEffect(() => {
+    apiGetUsers()
+      .then((fetched) => {
+        if (fetched && fetched.length > 0) {
+          setLiveUsers(fetched);
+        }
+      })
+      .catch(() => {});
+  }, [users]);
 
   // If already authenticated, redirect to root dashboard
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
     setIsLoading(true);
 
     try {
-      login(email, password);
+      await login(email, password);
       navigate('/', { replace: true });
     } catch (err: any) {
       setErrorMessage(err.message || 'Login failed. Please check your credentials.');
@@ -172,9 +185,10 @@ export const LoginPage: React.FC = () => {
                 Click an account to auto-fill (Password for all: <code className="font-mono text-[#CAA05C]">matra1234</code>):
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {users.slice(0, 6).map((u) => (
+                {(liveUsers && liveUsers.length > 0 ? liveUsers : users).slice(0, 6).map((u) => (
                   <button
                     key={u.id}
+                    type="button"
                     onClick={() => handleQuickFill(u.email)}
                     className="p-2 rounded-lg bg-[#212a27] hover:bg-[#283330] border border-[#2d3a36] text-left flex flex-col cursor-pointer transition-colors"
                   >

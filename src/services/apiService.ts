@@ -52,19 +52,51 @@ export async function syncWithBackend(): Promise<boolean> {
 }
 
 // --- Auth & Profile ---
-export async function apiLogin(email: string, pass: string): Promise<{ user: User; token: string } | null> {
+export async function apiGetUsers(): Promise<User[]> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/users`);
+    if (!res.ok) return [];
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function apiGetEmployees(): Promise<Employee[]> {
+  try {
+    const res = await fetch(`${API_BASE}/employees`);
+    if (!res.ok) return [];
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function apiLogin(
+  email: string,
+  pass: string
+): Promise<{ success: boolean; user?: User; token?: string; error?: string }> {
   try {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: pass }),
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password: pass.trim() }),
     });
-    if (!res.ok) return null;
     const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) return null;
-    return await res.json();
-  } catch {
-    return null;
+    if (!contentType.includes('application/json')) {
+      return { success: false, error: 'Server returned non-JSON response' };
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Invalid email or password' };
+    }
+    return { success: true, user: data.user, token: data.token };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error' };
   }
 }
 

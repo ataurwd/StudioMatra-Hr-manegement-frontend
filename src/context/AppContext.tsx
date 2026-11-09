@@ -9,7 +9,7 @@ export interface AppContextType {
   currentUser: User | null;
   users: User[];
   isAuthenticated: boolean;
-  login: (email: string, pass: string) => User;
+  login: (email: string, pass: string) => Promise<User>;
   logout: () => void;
   changePassword: (currentPass: string, newPass: string) => boolean;
   isOfficeNetwork: boolean;
@@ -106,17 +106,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return unsubscribe;
   }, [currentUser?.id]);
 
-  const login = (email: string, pass: string): User => {
+  const login = async (email: string, pass: string): Promise<User> => {
+    // 1. Direct authentication with MySQL REST API (/api/auth/login)
+    const apiRes = await apiLogin(email, pass);
+    if (apiRes.success && apiRes.user) {
+      const liveUser = apiRes.user;
+      setCurrentUser(liveUser);
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sanitizeUserForStorage(liveUser)));
+      setNotifications(db.getNotifications(liveUser.id));
+      syncWithBackend().catch(() => {});
+      return liveUser;
+    }
+
+    // If server actively returned an error (e.g. wrong password or suspended)
+    if (apiRes.error && !apiRes.error.includes('non-JSON') && !apiRes.error.includes('Network error')) {
+      throw new Error(apiRes.error);
+    }
+
+    // 2. Offline fallback if backend server is unreachable
     const authenticated = db.authenticateUser(email, pass);
     setCurrentUser(authenticated);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sanitizeUserForStorage(authenticated)));
     setNotifications(db.getNotifications(authenticated.id));
-    // Trigger background API sync
-    apiLogin(email, pass).then((res) => {
-      if (res && res.user) {
-        syncWithBackend().catch(() => {});
-      }
-    }).catch(() => {});
     return authenticated;
   };
 
