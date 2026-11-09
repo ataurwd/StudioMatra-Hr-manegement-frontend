@@ -111,6 +111,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const apiRes = await apiLogin(email, pass);
     if (apiRes.success && apiRes.user) {
       const liveUser = apiRes.user;
+      db.upsertUser(liveUser);
       setCurrentUser(liveUser);
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sanitizeUserForStorage(liveUser)));
       setNotifications(db.getNotifications(liveUser.id));

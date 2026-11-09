@@ -113,6 +113,16 @@ class StudioMatraDatabase {
               if (!u.password) {
                 u.password = 'matra1234';
               }
+              if (u.id === 'user-0001' && u.email === 'ishtiaque@studiomatra.com.bd') {
+                u.email = 'ishtiaque790@gmail.com';
+              }
+            }
+          }
+          if (parsed.employees) {
+            for (const emp of parsed.employees) {
+              if (emp.id === 'emp-0001' && emp.email === 'ishtiaque@studiomatra.com.bd') {
+                emp.email = 'ishtiaque790@gmail.com';
+              }
             }
           }
           if (parsed.payrollItems) {
@@ -260,6 +270,17 @@ class StudioMatraDatabase {
     return this.state.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
   }
 
+  public upsertUser(user: User): void {
+    const idx = this.state.users.findIndex((u) => u.id === user.id);
+    if (idx >= 0) {
+      this.state.users[idx] = { ...this.state.users[idx], ...user };
+    } else {
+      this.state.users.push(user);
+    }
+    this.persist(this.state);
+    this.notify();
+  }
+
   public authenticateUser(email: string, pass: string): User {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = pass.trim();
@@ -269,7 +290,16 @@ class StudioMatraDatabase {
       this.persist(this.state);
     }
 
-    const user = this.state.users.find((u) => u.email.toLowerCase() === cleanEmail);
+    let user = this.state.users.find((u) => u.email.toLowerCase() === cleanEmail);
+    // Flexible fallback: if user-0001 email was changed in MySQL or phpMyAdmin
+    if (!user && (cleanEmail === 'ishtiaque790@gmail.com' || cleanEmail === 'ishtiaque@studiomatra.com.bd')) {
+      user = this.state.users.find((u) => u.id === 'user-0001');
+      if (user) {
+        user.email = cleanEmail;
+        this.persist(this.state);
+      }
+    }
+
     if (!user) {
       throw new Error('No account found with this email address.');
     }

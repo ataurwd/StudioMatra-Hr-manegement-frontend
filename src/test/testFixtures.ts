@@ -63,7 +63,7 @@ export const TEST_USERS: User[] = [
   {
     id: 'user-0001',
     organizationId: 'org-studio-matra',
-    email: 'ishtiaque@studiomatra.com.bd',
+    email: 'ishtiaque790@gmail.com',
     password: 'matra1234',
     fullName: 'IAr. Md. Ishtiaque Haque',
     role: 'super_admin',
@@ -156,7 +156,7 @@ export const TEST_EMPLOYEES: Employee[] = [
     userId: 'user-0001',
     employeeCode: 'MATRA-001',
     fullName: 'IAr. Md. Ishtiaque Haque',
-    email: 'ishtiaque@studiomatra.com.bd',
+    email: 'ishtiaque790@gmail.com',
     phone: '01711174672',
     departmentId: 'dept-mgmt',
     designationId: 'des-ceo',

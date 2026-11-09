@@ -168,8 +168,9 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
       const dayOfWeekIndex = dayDate.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
       const dayName = dayFormatter.format(dayDate); // 'Sun', 'Mon', etc.
 
-      // Studio Matra Schedule: 6 Working Days (Sat–Thu), ONLY Friday is the weekly day off
-      const isWeekend = dayOfWeekIndex === 5;
+      // Studio Matra Schedule: dynamically based on shift.weeklyWorkDays (defaults to Friday off)
+      const isWorkDay = shift?.weeklyWorkDays ? shift.weeklyWorkDays.includes(dayOfWeekIndex) : dayOfWeekIndex !== 5;
+      const isWeekend = !isWorkDay;
       const isToday = dateStr === todayDhaka;
       const isFuture = dateStr > todayDhaka;
 
@@ -535,7 +536,9 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
           <span className="text-xl font-bold font-mono text-[#5b6461] block mt-0.5">
             {stats.weekendDays}
           </span>
-          <span className="text-[10px] text-[#86928e]">Fri & Sat closed</span>
+          <span className="text-[10px] text-[#86928e]">
+            {shift?.weeklyWorkDays && !shift.weeklyWorkDays.includes(6) ? 'Fri & Sat closed' : 'Weekly Friday closed'}
+          </span>
         </div>
 
         <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#ece7dc]">
@@ -581,16 +584,19 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
         <div className="mt-4">
           {/* Day of Week Headers */}
           <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-bold text-[#6e7774]">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri (Off)', 'Sat (Off)'].map((name, i) => (
-              <div
-                key={name}
-                className={`py-2 rounded-lg ${
-                  i === 5 || i === 6 ? 'bg-[#f4f1ea] text-[#8d9692]' : 'bg-[#faf9f5] text-[#1c2120]'
-                }`}
-              >
-                {name}
-              </div>
-            ))}
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((name, i) => {
+              const isOff = shift?.weeklyWorkDays ? !shift.weeklyWorkDays.includes(i) : i === 5;
+              return (
+                <div
+                  key={name}
+                  className={`py-2 rounded-lg ${
+                    isOff ? 'bg-[#f4f1ea] text-[#8d9692]' : 'bg-[#faf9f5] text-[#1c2120]'
+                  }`}
+                >
+                  {isOff ? `${name} (Off)` : name}
+                </div>
+              );
+            })}
           </div>
 
           {/* Calendar Grid Cells */}
