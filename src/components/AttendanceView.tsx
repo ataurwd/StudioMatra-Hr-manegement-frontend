@@ -197,7 +197,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
 
       {/* Tabs */}
       <div className="flex border-b border-[#e5e1d8] text-xs font-semibold gap-1">
-        {currentEmp && (
+        {(currentEmp || canManage) && (
           <button
             onClick={() => setActiveTab('calendar')}
             className={`px-4 py-2.5 rounded-t-xl transition-colors cursor-pointer flex items-center gap-2 ${
@@ -207,7 +207,12 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
             }`}
           >
             <CalendarDays className="w-4 h-4 text-[#CAA05C]" />
-            <span>My Attendance Calendar</span>
+            <span>{canManage ? 'Monthly Attendance Calendar & Management' : 'My Attendance Calendar'}</span>
+            {canManage && (
+              <span className="px-1.5 py-0.2 rounded-full bg-[#CAA05C] text-[#171c1b] font-bold text-[10px]">
+                Audit & Edit
+              </span>
+            )}
           </button>
         )}
 
@@ -270,11 +275,12 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </button>
       </div>
 
-      {/* Tab 0: My Attendance Calendar & Register */}
-      {activeTab === 'calendar' && currentEmp && (
+      {/* Tab 0: Monthly Attendance Calendar & Register */}
+      {activeTab === 'calendar' && (currentEmp || canManage) && (
         <AttendanceCalendarView
-          employeeId={currentEmp.id}
+          employeeId={currentEmp?.id}
           currentUser={currentUser}
+          allowEmployeeSwitch={canManage}
           onRequestCorrection={(date, session) => {
             if (session) {
               handleOpenCorrection(session);

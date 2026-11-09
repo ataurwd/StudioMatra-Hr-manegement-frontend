@@ -150,3 +150,28 @@ export async function apiUpdateEmployeePassword(employeeId: string, newPassword:
   }
 }
 
+export async function apiAdminOverrideAttendance(data: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/admin-override`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiAdminDeleteAttendance(sessionId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+

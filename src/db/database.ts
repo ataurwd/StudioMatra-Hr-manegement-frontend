@@ -8,6 +8,7 @@ import {
   AttendanceCorrectionRequest,
   AttendancePunchEvent,
   AttendanceSession,
+  AttendanceStatus,
   AuditLog,
   Department,
   Designation,
@@ -871,6 +872,129 @@ class StudioMatraDatabase {
 
     this.notify();
     return { session: activeSession, punch };
+  }
+
+  /**
+   * Super Admin / HR Admin Direct Attendance Override & Upsert
+   */
+  public adminUpsertAttendanceSession(
+    data: {
+      sessionId?: string;
+      employeeId: string;
+      attendanceDate: string;
+      checkInTime?: string;
+      checkOutTime?: string;
+      computedStatus?: AttendanceStatus;
+      breakMinutes?: number;
+      notes?: string;
+    },
+    adminUser: { userId: string; name: string }
+  ): AttendanceSession {
+    const { employeeId, attendanceDate, checkInTime, checkOutTime, computedStatus, notes } = data;
+    const breakMinutes = typeof data.breakMinutes === 'number' ? data.breakMinutes : 60;
+
+    let session = this.state.attendanceSessions.find(
+      (s) =>
+        (data.sessionId && s.id === data.sessionId) ||
+        (s.employeeId === employeeId && s.attendanceDate === attendanceDate)
+    );
+
+    const employee = this.getEmployeeById(employeeId);
+    if (!employee) throw new Error('Employee record not found');
+
+    const shift = this.state.shifts.find((s) => s.id === employee.shiftId) || this.state.shifts[0];
+
+    // Format ISO string in Asia/Dhaka time zone (+06:00)
+    let checkInIso = session?.checkInAt || `${attendanceDate}T09:00:00+06:00`;
+    if (checkInTime) {
+      checkInIso = checkInTime.includes('T')
+        ? checkInTime
+        : `${attendanceDate}T${checkInTime.length === 5 ? checkInTime + ':00' : checkInTime}+06:00`;
+    }
+
+    let checkOutIso = session?.checkOutAt;
+    if (checkOutTime) {
+      checkOutIso = checkOutTime.includes('T')
+        ? checkOutTime
+        : `${attendanceDate}T${checkOutTime.length === 5 ? checkOutTime + ':00' : checkOutTime}+06:00`;
+    }
+
+    const metrics = calculateSessionMetrics({
+      checkInAt: checkInIso,
+      checkOutAt: checkOutIso,
+      shift,
+    });
+
+    const finalStatus: AttendanceStatus = computedStatus || metrics.status;
+    const noteText = notes || `Administrative adjustment by ${adminUser.name}`;
+    const nowIso = new Date().toISOString();
+
+    if (!session) {
+      session = {
+        id: data.sessionId || `sess-adm-${Date.now()}`,
+        employeeId,
+        attendanceDate,
+        assignedShiftId: shift.id,
+        checkInAt: checkInIso,
+        checkOutAt: checkOutIso,
+        sourceType: 'manual_adjustment',
+        scheduledMinutes: metrics.scheduledMinutes,
+        workedMinutes: metrics.workedMinutes,
+        breakMinutes,
+        lateMinutes: metrics.lateMinutes,
+        earlyDepartureMinutes: metrics.earlyDepartureMinutes,
+        overtimeMinutes: metrics.overtimeMinutes,
+        computedStatus: finalStatus,
+        isMissingPunch: !checkOutIso && finalStatus !== 'absent',
+        notes: noteText,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      this.state.attendanceSessions.unshift(session);
+    } else {
+      session.checkInAt = checkInIso;
+      session.checkOutAt = checkOutIso;
+      session.workedMinutes = metrics.workedMinutes;
+      session.breakMinutes = breakMinutes;
+      session.lateMinutes = metrics.lateMinutes;
+      session.earlyDepartureMinutes = metrics.earlyDepartureMinutes;
+      session.overtimeMinutes = metrics.overtimeMinutes;
+      session.computedStatus = finalStatus;
+      session.isMissingPunch = !checkOutIso && finalStatus !== 'absent';
+      session.sourceType = 'manual_adjustment';
+      session.notes = noteText;
+      session.updatedAt = nowIso;
+    }
+
+    this.logAudit(adminUser, {
+      targetType: 'attendance',
+      targetId: session.id,
+      action: 'ADMIN_OVERRIDE',
+      details: `Admin ${adminUser.name} modified attendance for ${employee.fullName} on ${attendanceDate} (Status: ${finalStatus})`,
+    });
+
+    this.notify();
+    return session;
+  }
+
+  public adminDeleteAttendanceSession(sessionId: string, adminUser: { userId: string; name: string }): boolean {
+    const idx = this.state.attendanceSessions.findIndex((s) => s.id === sessionId);
+    if (idx !== -1) {
+      const sess = this.state.attendanceSessions[idx];
+      const emp = this.getEmployeeById(sess.employeeId);
+      this.state.attendanceSessions.splice(idx, 1);
+
+      this.logAudit(adminUser, {
+        targetType: 'attendance',
+        targetId: sessionId,
+        action: 'ADMIN_DELETE',
+        details: `Admin ${adminUser.name} purged attendance record for ${emp?.fullName || sess.employeeId} on ${sess.attendanceDate}`,
+      });
+
+      this.notify();
+      return true;
+    }
+    return false;
   }
 
   // -------------------------------------------------------------

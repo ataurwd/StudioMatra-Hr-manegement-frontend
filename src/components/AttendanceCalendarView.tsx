@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -9,23 +9,30 @@ import {
   ChevronRight,
   Clock,
   Coffee,
+  Edit3,
   HelpCircle,
   Info,
   List,
   MonitorSmartphone,
+  ShieldAlert,
   ShieldCheck,
   Timer,
+  UserCheck,
+  Users,
   X,
 } from 'lucide-react';
 import { db } from '../db/database';
 import { AttendanceSession, Employee, User } from '../types';
 import { formatMinutes } from '../utils/attendanceCalculator';
+import { canManageAttendance } from '../utils/permissions';
+import { AdminAttendanceEditModal } from './AdminAttendanceEditModal';
 
 interface AttendanceCalendarViewProps {
-  employeeId: string;
+  employeeId?: string;
   currentUser: User;
   onRequestCorrection?: (date: string, session?: AttendanceSession) => void;
   className?: string;
+  allowEmployeeSwitch?: boolean;
 }
 
 interface DayAttendanceRecord {
@@ -49,7 +56,28 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
   currentUser,
   onRequestCorrection,
   className = '',
+  allowEmployeeSwitch,
 }) => {
+  const canManage = canManageAttendance(currentUser.role);
+  const allowSwitch = allowEmployeeSwitch ?? canManage;
+
+  const employees = db.getEmployees();
+  const defaultEmpId =
+    employeeId ||
+    db.getEmployeeByUserId(currentUser.id)?.id ||
+    employees[0]?.id ||
+    '';
+
+  const [activeEmployeeId, setActiveEmployeeId] = useState<string>(defaultEmpId);
+  const [refreshKey, setRefreshKey] = useState<number>(0);
+
+  // Sync activeEmployeeId if prop changes
+  useEffect(() => {
+    if (employeeId && employeeId !== activeEmployeeId) {
+      setActiveEmployeeId(employeeId);
+    }
+  }, [employeeId]);
+
   // Current Dhaka time baseline
   const todayDhaka = useMemo(() => {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
@@ -66,7 +94,12 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDayRecord, setSelectedDayRecord] = useState<DayAttendanceRecord | null>(null);
 
-  const employee = db.getEmployeeById(employeeId);
+  // Admin Direct Edit Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<DayAttendanceRecord | null>(null);
+
+  const employee = db.getEmployeeById(activeEmployeeId);
+  const department = employee ? db.getDepartments().find((d) => d.id === employee.departmentId) : null;
   const shift = employee ? db.getShifts().find((s) => s.id === employee.shiftId) || db.getShifts()[0] : null;
 
   // Month navigation handlers
@@ -98,15 +131,29 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
     return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   }, [viewYear, viewMonth]);
 
+  // Employee cycling
+  const currentEmpIndex = employees.findIndex((e) => e.id === activeEmployeeId);
+  const handlePrevEmployee = () => {
+    if (employees.length === 0) return;
+    const newIdx = currentEmpIndex <= 0 ? employees.length - 1 : currentEmpIndex - 1;
+    setActiveEmployeeId(employees[newIdx].id);
+  };
+
+  const handleNextEmployee = () => {
+    if (employees.length === 0) return;
+    const newIdx = currentEmpIndex >= employees.length - 1 ? 0 : currentEmpIndex + 1;
+    setActiveEmployeeId(employees[newIdx].id);
+  };
+
   // Compute all days in the selected month with attendance records
   const monthDays = useMemo(() => {
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
     const records: DayAttendanceRecord[] = [];
 
     // Fetch all sessions and leaves for this employee
-    const allSessions = db.getAttendanceSessions({ employeeId });
+    const allSessions = db.getAttendanceSessions({ employeeId: activeEmployeeId });
     const allLeaves = db.getLeaveRequests().filter(
-      (l) => l.employeeId === employeeId && (l.status === 'approved' || l.status === 'manager_approved')
+      (l) => l.employeeId === activeEmployeeId && (l.status === 'approved' || l.status === 'manager_approved')
     );
 
     const dayFormatter = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
@@ -176,6 +223,10 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
           computedCategory = 'half_day';
         } else if (session.computedStatus === 'present') {
           computedCategory = 'present';
+        } else if (session.computedStatus === 'paid_leave') {
+          computedCategory = 'leave';
+        } else if (session.computedStatus === 'absent') {
+          computedCategory = 'absent';
         } else {
           computedCategory = 'present';
         }
@@ -214,10 +265,9 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
     }
 
     return records;
-  }, [viewYear, viewMonth, employeeId, todayDhaka]);
+  }, [viewYear, viewMonth, activeEmployeeId, todayDhaka, refreshKey]);
 
   // Calendar grid padding (day of week of the 1st of the month)
-  // Sunday = 0, Monday = 1, etc.
   const startDayOfWeek = useMemo(() => {
     return new Date(viewYear, viewMonth, 1).getDay();
   }, [viewYear, viewMonth]);
@@ -275,21 +325,93 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
 
   return (
     <div className={`bg-white rounded-2xl border border-[#e8e4da] p-6 shadow-xs ${className}`}>
+      {/* SUPER ADMIN EMPLOYEE SELECTOR BAR */}
+      {allowSwitch && (
+        <div className="mb-6 p-4.5 bg-[#faf9f5] border border-[#e8e4da] rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-full bg-[#1c2120] text-white flex items-center justify-center font-bold text-base border border-[#3b4441] shadow-2xs">
+              {employee?.fullName
+                .split(' ')
+                .map((n) => n[0])
+                .slice(0, 2)
+                .join('')}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-[#8f6927] bg-[#f7efe0] border border-[#ebd8b7] px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <Users className="w-3 h-3 text-[#CAA05C]" />
+                  Individual Staff Attendance Audit
+                </span>
+                <span className="text-xs text-[#717b77]">• Super Admin Mode</span>
+              </div>
+              <h3 className="text-lg font-bold text-[#1c2120] flex items-center gap-2">
+                <span>{employee?.fullName}</span>
+                <span className="font-mono text-xs font-bold text-[#CAA05C] bg-[#1c2120] px-2 py-0.5 rounded-md">
+                  {employee?.employeeCode}
+                </span>
+              </h3>
+              <p className="text-xs text-[#6e7774] mt-0.5">
+                Department: <strong className="text-[#1c2120]">{department?.name || 'Architecture'}</strong> • Shift: {shift?.startTime} – {shift?.endTime} (8 hrs/day)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-[#6a7571] mb-1">
+                Select Employee:
+              </label>
+              <select
+                value={activeEmployeeId}
+                onChange={(e) => setActiveEmployeeId(e.target.value)}
+                className="px-3.5 py-2 rounded-xl border border-[#ded8cb] bg-white text-xs font-bold text-[#1c2120] focus:outline-none focus:border-[#CAA05C] shadow-2xs min-w-64 cursor-pointer"
+              >
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.fullName} ({emp.employeeCode})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quick Prev / Next Employee buttons */}
+            <div className="flex items-center gap-1 pt-4">
+              <button
+                type="button"
+                onClick={handlePrevEmployee}
+                title="Previous Employee"
+                className="p-2 rounded-xl bg-white border border-[#ded8cb] hover:bg-[#ede8dc] text-[#333d39] transition-colors cursor-pointer shadow-2xs"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleNextEmployee}
+                title="Next Employee"
+                className="p-2 rounded-xl bg-white border border-[#ded8cb] hover:bg-[#ede8dc] text-[#333d39] transition-colors cursor-pointer shadow-2xs"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header with Month Navigation & View Mode Switcher */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#f0ece1]">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs uppercase font-bold tracking-wider text-[#8f6927] bg-[#f7efe0] border border-[#ebd8b7] px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
               <Calendar className="w-3 h-3 text-[#CAA05C]" />
-              Attendance Calendar & Time Register
+              Full Month Attendance & Time Register
             </span>
             <span className="text-xs text-[#717b77]">• Asia/Dhaka Time</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1c2120]">
-            Daily Check-In & Check-Out Record
+            Monthly Attendance Calendar: {employee?.fullName}
           </h2>
           <p className="text-xs text-[#6e7774] mt-0.5">
-            Complete daily audit of punches, worked hours, and lunch break deductions for {employee?.fullName}
+            Individual full-month attendance view with direct administrative override & time adjustments
           </p>
         </div>
 
@@ -352,97 +474,124 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
         </div>
       </div>
 
-      {/* Monthly Performance KPI Metric Chips */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 py-5">
-        <div className="bg-[#faf9f5] p-3.5 rounded-xl border border-[#e8e4da]">
-          <span className="text-[11px] font-medium text-[#717b77] block">Present Days</span>
-          <span className="text-xl font-bold text-[#1b4332] font-mono mt-0.5 block">
-            {stats.presentDays} <span className="text-xs text-[#717b77] font-normal">days</span>
+      {/* Monthly Statistics Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 py-5 border-b border-[#f0ece1]">
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#ece7dc]">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#717b77] block">
+            Present Days
           </span>
-          <span className="text-[10px] text-emerald-700 font-medium">Recorded Punches</span>
+          <span className="text-xl font-bold font-mono text-emerald-700 block mt-0.5">
+            {stats.presentDays}
+          </span>
+          <span className="text-[10px] text-[#86928e]">Workdays attended</span>
         </div>
 
-        <div className="bg-[#faf9f5] p-3.5 rounded-xl border border-[#e8e4da]">
-          <span className="text-[11px] font-medium text-[#717b77] block">Late Arrivals</span>
-          <span className="text-xl font-bold text-amber-700 font-mono mt-0.5 block">
-            {stats.lateDays} <span className="text-xs text-[#717b77] font-normal">days</span>
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#ece7dc]">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#717b77] block">
+            Late Days
           </span>
-          <span className="text-[10px] text-[#7d8783]">After 10m Grace</span>
+          <span className="text-xl font-bold font-mono text-amber-700 block mt-0.5">
+            {stats.lateDays}
+          </span>
+          <span className="text-[10px] text-[#86928e]">Grace threshold exceeded</span>
         </div>
 
-        <div className="bg-[#faf9f5] p-3.5 rounded-xl border border-[#e8e4da]">
-          <span className="text-[11px] font-medium text-[#717b77] block">Approved Leaves</span>
-          <span className="text-xl font-bold text-teal-800 font-mono mt-0.5 block">
-            {stats.leaveDays} <span className="text-xs text-[#717b77] font-normal">days</span>
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#ece7dc]">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#717b77] block">
+            Leave Taken
           </span>
-          <span className="text-[10px] text-[#7d8783]">Paid & Quota</span>
+          <span className="text-xl font-bold font-mono text-purple-700 block mt-0.5">
+            {stats.leaveDays}
+          </span>
+          <span className="text-[10px] text-[#86928e]">Approved leaves</span>
         </div>
 
-        <div className="bg-[#faf9f5] p-3.5 rounded-xl border border-[#e8e4da]">
-          <span className="text-[11px] font-medium text-[#717b77] block">Absent / Missing</span>
-          <span className="text-xl font-bold text-stone-700 font-mono mt-0.5 block">
-            {stats.absentDays} <span className="text-xs text-[#717b77] font-normal">days</span>
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#ece7dc]">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#717b77] block">
+            Absent Days
           </span>
-          <span className="text-[10px] text-red-600 font-medium">Unexcused</span>
+          <span className="text-xl font-bold font-mono text-red-700 block mt-0.5">
+            {stats.absentDays}
+          </span>
+          <span className="text-[10px] text-[#86928e]">Unattended / unexcused</span>
         </div>
 
-        <div className="bg-[#faf9f5] p-3.5 rounded-xl border border-[#e8e4da] col-span-2 sm:col-span-1">
-          <span className="text-[11px] font-medium text-[#717b77] block">Net Hours Worked</span>
-          <span className="text-xl font-bold text-[#CAA05C] font-mono mt-0.5 block">
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#ece7dc]">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#717b77] block">
+            Weekend Off
+          </span>
+          <span className="text-xl font-bold font-mono text-[#5b6461] block mt-0.5">
+            {stats.weekendDays}
+          </span>
+          <span className="text-[10px] text-[#86928e]">Fri & Sat closed</span>
+        </div>
+
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#ece7dc]">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#717b77] block">
+            Net Worked Hours
+          </span>
+          <span className="text-xl font-bold font-mono text-[#1b4332] block mt-0.5">
             {formatMinutes(stats.totalMinutesWorked)}
           </span>
-          <span className="text-[10px] text-emerald-700 font-medium">Break Deducted</span>
+          <span className="text-[10px] text-[#86928e]">Less 1 hr lunch break</span>
         </div>
       </div>
 
-      {/* FILTER TABS (FOR LIST VIEW OR QUICK HIGHLIGHT) */}
+      {/* Status Filter Tabs (for List View) */}
       {viewMode === 'list' && (
-        <div className="flex flex-wrap items-center gap-1.5 pb-4 border-b border-[#f0ece1]">
+        <div className="flex flex-wrap items-center gap-1.5 pt-4 text-xs">
+          <span className="text-[11px] font-bold text-[#717b77] mr-1">Filter Records:</span>
           {[
-            { id: 'all', label: 'All Days (30)' },
-            { id: 'workdays', label: 'Office Workdays' },
-            { id: 'present', label: 'Present / On Time' },
-            { id: 'late', label: 'Late Punches' },
-            { id: 'leave', label: 'Approved Leaves' },
-            { id: 'absent', label: 'Absent / Missing' },
-          ].map((f) => (
+            { id: 'all', label: 'All Days' },
+            { id: 'workdays', label: 'Workdays Only' },
+            { id: 'present', label: 'Present' },
+            { id: 'late', label: 'Late Arrival' },
+            { id: 'leave', label: 'On Leave' },
+            { id: 'absent', label: 'Absent' },
+          ].map((tab) => (
             <button
-              key={f.id}
-              onClick={() => setStatusFilter(f.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                statusFilter === f.id
-                  ? 'bg-[#CAA05C] text-[#171c1b] font-bold shadow-2xs'
-                  : 'bg-[#faf9f5] text-[#555f5c] hover:bg-[#ede8dc]'
+              key={tab.id}
+              onClick={() => setStatusFilter(tab.id)}
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                statusFilter === tab.id
+                  ? 'bg-[#1c2120] text-white shadow-2xs'
+                  : 'bg-[#faf9f5] text-[#6d7572] hover:bg-[#ede8dc]'
               }`}
             >
-              {f.label}
+              {tab.label}
             </button>
           ))}
         </div>
       )}
 
-      {/* MODE 1: MONTHLY CALENDAR GRID */}
+      {/* MODE 1: VISUAL CALENDAR GRID */}
       {viewMode === 'calendar' && (
-        <div className="mt-2">
-          {/* Day of week headers */}
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-[#5d6864] mb-2 uppercase tracking-wider text-[11px]">
-            <div className="py-2 bg-[#f9f8f4] rounded-lg">Sun</div>
-            <div className="py-2 bg-[#f9f8f4] rounded-lg">Mon</div>
-            <div className="py-2 bg-[#f9f8f4] rounded-lg">Tue</div>
-            <div className="py-2 bg-[#f9f8f4] rounded-lg">Wed</div>
-            <div className="py-2 bg-[#f9f8f4] rounded-lg">Thu</div>
-            <div className="py-2 bg-[#f0ede6] text-[#857159] rounded-lg">Fri (Wknd)</div>
-            <div className="py-2 bg-[#f0ede6] text-[#857159] rounded-lg">Sat (Wknd)</div>
+        <div className="mt-4">
+          {/* Day of Week Headers */}
+          <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-bold text-[#6e7774]">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri (Off)', 'Sat (Off)'].map((name, i) => (
+              <div
+                key={name}
+                className={`py-2 rounded-lg ${
+                  i === 5 || i === 6 ? 'bg-[#f4f1ea] text-[#8d9692]' : 'bg-[#faf9f5] text-[#1c2120]'
+                }`}
+              >
+                {name}
+              </div>
+            ))}
           </div>
 
-          {/* Days Grid */}
+          {/* Calendar Grid Cells */}
           <div className="grid grid-cols-7 gap-2">
-            {/* Blank leading days */}
-            {Array.from({ length: startDayOfWeek }).map((_, idx) => (
-              <div key={`blank-${idx}`} className="h-28 sm:h-32 rounded-xl bg-[#faf9f6]/40 border border-dashed border-[#ece7dc]" />
+            {/* Empty Offset Days from Previous Month */}
+            {Array.from({ length: startDayOfWeek }).map((_, i) => (
+              <div
+                key={`empty-${i}`}
+                className="h-28 sm:h-32 rounded-xl bg-[#faf9f5]/30 border border-dashed border-[#ece7dc] opacity-40"
+              />
             ))}
 
-            {/* Actual Month Days */}
+            {/* Days in Month */}
             {monthDays.map((record) => {
               const {
                 dateStr,
@@ -516,13 +665,31 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                       {dayNumber}
                     </span>
 
-                    {statusText && (
-                      <span
-                        className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded border truncate max-w-[85px] sm:max-w-none ${badgeBg}`}
-                      >
-                        {statusText}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {statusText && (
+                        <span
+                          className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded border truncate max-w-[85px] sm:max-w-none ${badgeBg}`}
+                        >
+                          {statusText}
+                        </span>
+                      )}
+
+                      {/* Admin Quick Edit Pencil Button */}
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingRecord(record);
+                            setIsEditModalOpen(true);
+                          }}
+                          title="Edit this day's attendance"
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-[#1c2120] text-[#CAA05C] hover:bg-[#2b3532] transition-opacity cursor-pointer shadow-xs"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Middle Content: Check-In & Check-Out Times */}
@@ -558,7 +725,7 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                     )}
                   </div>
 
-                  {/* Bottom: Worked duration */}
+                  {/* Bottom: Worked duration & Details */}
                   <div className="flex items-center justify-between pt-1 border-t border-[#f0ece1]/70 text-[9px] sm:text-[10px] text-[#717b77]">
                     {workedMinutesFormatted ? (
                       <span className="font-mono font-bold text-[#1b4332] flex items-center gap-1">
@@ -570,8 +737,9 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                         {isWeekend ? 'Off' : isFuture ? 'Upcoming' : '—'}
                       </span>
                     )}
+
                     <span className="opacity-0 group-hover:opacity-100 text-[#CAA05C] font-bold transition-opacity">
-                      Details →
+                      {canManage ? 'Edit / View →' : 'Details →'}
                     </span>
                   </div>
                 </div>
@@ -598,14 +766,13 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f2eee6] text-[#2c3330]">
+            <tbody className="divide-y divide-[#f0ece1]">
               {filteredListDays.map((record) => {
                 const {
                   dateStr,
-                  dayName,
-                  dayNumber,
-                  isToday,
+                  fullDateLabel,
                   isWeekend,
+                  isToday,
                   session,
                   computedCategory,
                   checkInTimeFormatted,
@@ -613,140 +780,127 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                   workedMinutesFormatted,
                 } = record;
 
+                let rowStatusBadge = (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-stone-100 text-stone-700">
+                    Scheduled
+                  </span>
+                );
+
+                if (computedCategory === 'present') {
+                  rowStatusBadge = (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                      Present
+                    </span>
+                  );
+                } else if (computedCategory === 'late') {
+                  rowStatusBadge = (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      Late Arrival
+                    </span>
+                  );
+                } else if (computedCategory === 'half_day') {
+                  rowStatusBadge = (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
+                      Half Day
+                    </span>
+                  );
+                } else if (computedCategory === 'leave') {
+                  rowStatusBadge = (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                      On Leave
+                    </span>
+                  );
+                } else if (computedCategory === 'missing') {
+                  rowStatusBadge = (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
+                      Missing Punch
+                    </span>
+                  );
+                } else if (computedCategory === 'absent') {
+                  rowStatusBadge = (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-900 border border-red-300">
+                      Absent
+                    </span>
+                  );
+                } else if (isWeekend) {
+                  rowStatusBadge = (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#ece6d8] text-[#6d7572]">
+                      Studio Weekend
+                    </span>
+                  );
+                }
+
                 return (
                   <tr
                     key={dateStr}
                     className={`hover:bg-[#faf9f5] transition-colors ${
-                      isToday ? 'bg-amber-50/30 font-semibold' : ''
+                      isToday ? 'bg-amber-50/20 font-semibold' : ''
                     }`}
                   >
-                    <td className="py-3 px-4 font-mono">
+                    <td className="py-3 px-4 font-mono font-medium">
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold ${
-                            isToday
-                              ? 'bg-[#CAA05C] text-[#171c1b]'
-                              : isWeekend
-                              ? 'bg-[#ede8dc] text-[#6d7572]'
-                              : 'bg-[#f4f1ea] text-[#1c2120]'
-                          }`}
-                        >
-                          {dayNumber}
-                        </span>
-                        <div>
-                          <p className="font-bold text-[#1c2120]">
-                            {dayName}, {dateStr}
-                          </p>
-                          {isToday && <span className="text-[10px] text-[#CAA05C] font-bold">TODAY</span>}
-                        </div>
+                        {isToday && (
+                          <span className="w-2 h-2 rounded-full bg-[#CAA05C] animate-pulse" />
+                        )}
+                        <span>{fullDateLabel}</span>
                       </div>
                     </td>
 
                     <td className="py-3 px-4 font-mono">
                       {checkInTimeFormatted ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold text-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                          {checkInTimeFormatted}
-                        </span>
-                      ) : isWeekend ? (
-                        <span className="text-[#8c9692]">Weekend</span>
+                        <span className="text-emerald-800 font-bold">{checkInTimeFormatted}</span>
                       ) : (
-                        <span className="text-[#a4ada9]">—</span>
+                        <span className="text-[#9aa4a0]">—</span>
                       )}
                     </td>
 
                     <td className="py-3 px-4 font-mono">
                       {checkOutTimeFormatted ? (
                         <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-semibold ${
+                          className={`font-bold ${
                             checkOutTimeFormatted === 'In Progress'
-                              ? 'bg-amber-50 text-amber-800 border-amber-200 animate-pulse'
+                              ? 'text-[#CAA05C]'
                               : checkOutTimeFormatted === 'Missing Punch'
-                              ? 'bg-rose-50 text-rose-800 border-rose-200 font-bold'
-                              : 'bg-[#faf9f5] text-[#2c3330] border-[#ded8cb]'
+                              ? 'text-red-600'
+                              : 'text-amber-800'
                           }`}
                         >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              checkOutTimeFormatted === 'In Progress'
-                                ? 'bg-amber-600'
-                                : checkOutTimeFormatted === 'Missing Punch'
-                                ? 'bg-rose-600'
-                                : 'bg-[#CAA05C]'
-                            }`}
-                          />
                           {checkOutTimeFormatted}
                         </span>
-                      ) : isWeekend ? (
-                        <span className="text-[#8c9692]">Weekend</span>
                       ) : (
-                        <span className="text-[#a4ada9]">—</span>
+                        <span className="text-[#9aa4a0]">—</span>
                       )}
                     </td>
 
-                    <td className="py-3 px-4 font-mono">
-                      {workedMinutesFormatted ? (
-                        <span className="font-bold text-[#1b4332]">{workedMinutesFormatted}</span>
-                      ) : (
-                        <span className="text-[#a4ada9]">—</span>
-                      )}
+                    <td className="py-3 px-4 font-mono font-bold text-[#1b4332]">
+                      {workedMinutesFormatted || '—'}
                     </td>
 
                     <td className="py-3 px-4 text-[#717b77]">
                       {session?.breakMinutes ? (
-                        <span>{session.breakMinutes} mins deducted</span>
+                        <span className="font-mono">-{session.breakMinutes}m</span>
+                      ) : isWeekend ? (
+                        <span className="text-[#9aa4a0]">—</span>
                       ) : (
-                        <span>—</span>
-                      )}
-                    </td>
-
-                    <td className="py-3 px-4 font-mono">
-                      {session?.lateMinutes && session.lateMinutes > 0 ? (
-                        <span className="text-amber-700 font-bold">+{session.lateMinutes}m Late</span>
-                      ) : session?.earlyDepartureMinutes && session.earlyDepartureMinutes > 0 ? (
-                        <span className="text-orange-700 font-medium">-{session.earlyDepartureMinutes}m Early</span>
-                      ) : session ? (
-                        <span className="text-emerald-700 font-medium">On Schedule</span>
-                      ) : (
-                        <span className="text-[#8c9692]">—</span>
+                        <span className="font-mono text-[#8f6927]">-60m</span>
                       )}
                     </td>
 
                     <td className="py-3 px-4">
-                      {computedCategory === 'present' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                          PRESENT
+                      {session?.lateMinutes ? (
+                        <span className="text-amber-700 font-semibold font-mono text-[11px]">
+                          +{session.lateMinutes}m Late
                         </span>
-                      ) : computedCategory === 'late' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px]">
-                          LATE
-                        </span>
-                      ) : computedCategory === 'half_day' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-bold text-[10px]">
-                          HALF DAY
-                        </span>
-                      ) : computedCategory === 'leave' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 font-bold text-[10px]">
-                          APPROVED LEAVE
-                        </span>
-                      ) : computedCategory === 'missing' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 font-bold text-[10px]">
-                          MISSING PUNCH
-                        </span>
-                      ) : computedCategory === 'absent' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 font-bold text-[10px]">
-                          ABSENT
-                        </span>
-                      ) : isWeekend ? (
-                        <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium text-[10px]">
-                          WEEKEND
+                      ) : session?.earlyDepartureMinutes ? (
+                        <span className="text-orange-700 font-semibold font-mono text-[11px]">
+                          -{session.earlyDepartureMinutes}m Early
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-500 font-medium text-[10px]">
-                          SCHEDULED
-                        </span>
+                        <span className="text-[#9aa4a0]">—</span>
                       )}
                     </td>
+
+                    <td className="py-3 px-4">{rowStatusBadge}</td>
 
                     <td className="py-3 px-4 text-[#717b77]">
                       {session?.sourceType === 'kiosk' ? (
@@ -759,18 +913,37 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                           Office Network
                         </span>
+                      ) : session?.sourceType === 'manual_adjustment' ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-800 font-semibold">
+                          <Edit3 className="w-3 h-3 text-[#CAA05C]" />
+                          Admin Adjusted
+                        </span>
                       ) : (
                         <span>—</span>
                       )}
                     </td>
 
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setSelectedDayRecord(record)}
-                        className="px-2.5 py-1 bg-[#f4f1ea] hover:bg-[#eae6dc] rounded-md text-[11px] font-semibold text-[#1c2120] transition-colors cursor-pointer"
-                      >
-                        Details
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {canManage && (
+                          <button
+                            onClick={() => {
+                              setEditingRecord(record);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 bg-[#1c2120] hover:bg-[#2b3532] rounded-md text-[11px] font-bold text-white transition-colors cursor-pointer flex items-center gap-1 shadow-2xs border border-[#3b4340]"
+                          >
+                            <Edit3 className="w-3 h-3 text-[#CAA05C]" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setSelectedDayRecord(record)}
+                          className="px-2.5 py-1 bg-[#f4f1ea] hover:bg-[#eae6dc] rounded-md text-[11px] font-semibold text-[#1c2120] transition-colors cursor-pointer"
+                        >
+                          Details
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -780,7 +953,7 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
         </div>
       )}
 
-      {/* INTERACTIVE DAY DETAIL MODAL */}
+      {/* INTERACTIVE DAY DETAIL BREAKDOWN MODAL */}
       {selectedDayRecord && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-7 border border-[#ded8cb] shadow-2xl animate-in zoom-in-95">
@@ -804,12 +977,12 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
             <div className="my-5 space-y-3.5 text-xs">
               <div className="p-3.5 bg-[#faf9f5] rounded-xl border border-[#ece7dc] grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-[#717b77] block text-[11px]">Assigned Shift</span>
+                  <span className="text-[#717b77] block text-[11px]">Employee</span>
                   <span className="font-bold text-[#1c2120] block mt-0.5">
-                    {shift?.name || 'Standard Shift'}
+                    {employee?.fullName}
                   </span>
                   <span className="text-[10px] text-[#86928e]">
-                    {shift?.startTime} – {shift?.endTime} (480 mins)
+                    Code: {employee?.employeeCode} • {shift?.name}
                   </span>
                 </div>
                 <div>
@@ -867,24 +1040,49 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-[#6d7773]">Mandatory Lunch Break:</span>
                   <span className="font-mono font-semibold text-[#8f6927]">
-                    -{selectedDayRecord.session?.breakMinutes || 0} mins (Studio Matra Policy)
+                    -{selectedDayRecord.session?.breakMinutes ?? 60} mins (Studio Matra Policy)
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs pt-2 border-t border-[#f0ece1]">
                   <span className="text-[#1c2120] font-bold">Terminal Source:</span>
                   <span className="font-semibold text-[#1c2120]">
                     {selectedDayRecord.session?.sourceType === 'kiosk'
-                      ? 'Studio Reception Kiosk #1 (Terminal Banani)'
+                      ? 'Studio Reception Kiosk #1 (Banani Terminal)'
                       : selectedDayRecord.session?.sourceType === 'office_network'
                       ? 'Authorized Office Wi-Fi Network'
+                      : selectedDayRecord.session?.sourceType === 'manual_adjustment'
+                      ? 'Administrative Manual Adjustment'
                       : 'None'}
                   </span>
                 </div>
+                {selectedDayRecord.session?.notes && (
+                  <div className="flex justify-between items-center text-xs pt-2 border-t border-[#f0ece1]">
+                    <span className="text-[#6d7773]">Audit Notes:</span>
+                    <span className="font-medium text-[#1c2120] italic">
+                      {selectedDayRecord.session.notes}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-[#f0ece1]">
-              {onRequestCorrection && selectedDayRecord.session && (
+              {canManage && (
+                <button
+                  onClick={() => {
+                    const rec = selectedDayRecord;
+                    setSelectedDayRecord(null);
+                    setEditingRecord(rec);
+                    setIsEditModalOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#1c2120] hover:bg-[#2b3532] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs border border-[#3b4340]"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-[#CAA05C]" />
+                  <span>Admin: Edit Attendance</span>
+                </button>
+              )}
+
+              {onRequestCorrection && selectedDayRecord.session && !canManage && (
                 <button
                   onClick={() => {
                     const sess = selectedDayRecord.session;
@@ -897,6 +1095,7 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                   Request Correction
                 </button>
               )}
+
               <button
                 onClick={() => setSelectedDayRecord(null)}
                 className="px-5 py-2 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] text-xs font-bold cursor-pointer"
@@ -907,7 +1106,34 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* ADMIN DIRECT ATTENDANCE EDIT MODAL */}
+      {isEditModalOpen && editingRecord && employee && (
+        <AdminAttendanceEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingRecord(null);
+          }}
+          dateStr={editingRecord.dateStr}
+          employee={employee}
+          existingSession={editingRecord.session}
+          currentUser={currentUser}
+          onSaved={() => {
+            setRefreshKey((k) => k + 1);
+            if (selectedDayRecord && selectedDayRecord.dateStr === editingRecord.dateStr) {
+              const updatedSession = db.getAttendanceSessions({
+                employeeId: activeEmployeeId,
+                startDate: editingRecord.dateStr,
+                endDate: editingRecord.dateStr,
+              })[0];
+              setSelectedDayRecord((prev) =>
+                prev ? { ...prev, session: updatedSession } : null
+              );
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
-

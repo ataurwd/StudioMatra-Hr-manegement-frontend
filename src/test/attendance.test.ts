@@ -5,6 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { db } from '../db/database';
 import {
   calculateCheckInMetrics,
   calculateSessionMetrics,
@@ -119,3 +120,69 @@ test('formatMinutes formats properly', () => {
   assert.equal(formatMinutes(45), '45m');
   assert.equal(formatMinutes(0), '0m');
 });
+
+test('Super Admin can directly override and upsert attendance session for an individual employee', () => {
+  const adminActor = { userId: 'user-0001', name: 'Ar. Nahid Rahman' };
+  const employees = db.getEmployees();
+  assert.ok(employees.length > 0);
+  const targetEmp = employees[0];
+
+  const session = db.adminUpsertAttendanceSession(
+    {
+      employeeId: targetEmp.id,
+      attendanceDate: '2026-11-20',
+      checkInTime: '09:00',
+      checkOutTime: '18:00',
+      computedStatus: 'present',
+      breakMinutes: 60,
+      notes: 'Super Admin manual adjustment',
+    },
+    adminActor
+  );
+
+  assert.ok(session);
+  assert.equal(session.employeeId, targetEmp.id);
+  assert.equal(session.attendanceDate, '2026-11-20');
+  assert.equal(session.computedStatus, 'present');
+  assert.equal(session.workedMinutes, 480);
+  assert.equal(session.sourceType, 'manual_adjustment');
+
+  // Verify it can be retrieved by employeeId
+  const retrieved = db.getAttendanceSessions({
+    employeeId: targetEmp.id,
+    startDate: '2026-11-20',
+    endDate: '2026-11-20',
+  });
+  assert.equal(retrieved.length, 1);
+  assert.equal(retrieved[0].id, session.id);
+});
+
+test('Super Admin can delete attendance session to clear or mark absent', () => {
+  const adminActor = { userId: 'user-0001', name: 'Ar. Nahid Rahman' };
+  const employees = db.getEmployees();
+  const targetEmp = employees[0];
+
+  // Create temporary session
+  const session = db.adminUpsertAttendanceSession(
+    {
+      employeeId: targetEmp.id,
+      attendanceDate: '2026-11-21',
+      checkInTime: '09:30',
+      checkOutTime: '18:00',
+      computedStatus: 'late',
+      notes: 'Temporary session to delete',
+    },
+    adminActor
+  );
+
+  const deleted = db.adminDeleteAttendanceSession(session.id, adminActor);
+  assert.equal(deleted, true);
+
+  const afterDelete = db.getAttendanceSessions({
+    employeeId: targetEmp.id,
+    startDate: '2026-11-21',
+    endDate: '2026-11-21',
+  });
+  assert.equal(afterDelete.length, 0);
+});
+

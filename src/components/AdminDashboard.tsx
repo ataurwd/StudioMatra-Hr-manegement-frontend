@@ -80,7 +80,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onN
   const paidCount = payrollItems.filter((i) => i.paymentStatus === 'paid').length;
   const totalItemsCount = payrollItems.length;
 
-  const [dashboardView, setDashboardView] = useState<'overview' | 'my_attendance'>('overview');
+  const [dashboardView, setDashboardView] = useState<'overview' | 'staff_calendar' | 'my_attendance'>('overview');
   const currentEmp = currentUser.employeeId
     ? db.getEmployeeById(currentUser.employeeId)
     : db.getEmployeeByUserId(currentUser.id);
@@ -102,6 +102,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onN
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setDashboardView('staff_calendar')}
+            className="px-4 py-2 rounded-xl bg-[#1c2120] hover:bg-[#2b3532] text-white text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs border border-[#3b4340]"
+          >
+            <Calendar className="w-4 h-4 text-[#CAA05C]" />
+            <span>Staff Attendance Calendar</span>
+          </button>
           <button
             onClick={() => goTo('attendance')}
             className="px-4 py-2 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
@@ -134,6 +141,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onN
         </button>
 
         <button
+          onClick={() => setDashboardView('staff_calendar')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            dashboardView === 'staff_calendar'
+              ? 'bg-[#171c1b] text-white shadow-xs'
+              : 'bg-white text-[#65716c] hover:bg-[#f4f1ea]'
+          }`}
+        >
+          <Calendar className="w-4 h-4 text-[#CAA05C]" />
+          <span>Staff Monthly Attendance & Management</span>
+          <span className="text-[10px] bg-[#CAA05C] text-[#171c1b] px-1.5 py-0.2 rounded-full font-bold">
+            All Staff
+          </span>
+        </button>
+
+        <button
           onClick={() => setDashboardView('my_attendance')}
           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
             dashboardView === 'my_attendance'
@@ -147,7 +169,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onN
         </button>
       </div>
 
-      {dashboardView === 'my_attendance' ? (
+      {dashboardView === 'staff_calendar' ? (
+        <AttendanceCalendarView
+          currentUser={currentUser}
+          allowEmployeeSwitch={true}
+          onRequestCorrection={() => goTo('attendance')}
+        />
+      ) : dashboardView === 'my_attendance' ? (
         /* My Personal Attendance & Kiosk PIN Tab */
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
