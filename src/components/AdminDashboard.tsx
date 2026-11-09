@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -29,6 +29,11 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onNavigate }) => {
+  const [, setDbTick] = useState(0);
+  useEffect(() => {
+    return db.subscribe(() => setDbTick((t) => t + 1));
+  }, []);
+
   const navigate = useNavigate();
   const goTo = (tab: string) => {
     if (onNavigate) {

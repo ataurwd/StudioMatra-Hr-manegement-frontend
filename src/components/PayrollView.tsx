@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { db } from '../db/database';
 import { generatePayslipPDF } from '../services/pdfGenerator';
+import { apiRecordPayment } from '../services/apiService';
 import { PayrollItem, PayrollPeriod, PayrollRun, RoleName, SalaryAdvance, SalaryContract, User } from '../types';
 import { canManagePayroll, canViewSalary } from '../utils/permissions';
 import { formatBDT } from '../utils/money';
@@ -30,8 +31,15 @@ interface PayrollViewProps {
 }
 
 export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
+  const [, setDbTick] = useState(0);
+  useEffect(() => {
+    return db.subscribe(() => setDbTick((t) => t + 1));
+  }, []);
+
   const isEmployeeRole = currentUser.role === 'employee';
-  const currentEmp = db.getEmployeeByUserId(currentUser.id);
+  const currentEmp = currentUser.employeeId
+    ? db.getEmployeeById(currentUser.employeeId)
+    : db.getEmployeeByUserId(currentUser.id);
   const canManage = canManagePayroll(currentUser.role);
   const canViewComp = canViewSalary(currentUser.role);
 
@@ -60,6 +68,21 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
   const allRuns = db.getPayrollRuns();
   const advances = db.getSalaryAdvances(isEmployeeRole && currentEmp ? currentEmp.id : undefined);
   const contracts = db.getSalaryContracts();
+
+  const getPeriodLabel = (slip: PayrollItem) => {
+    const run = allRuns.find((r) => r.id === slip.payrollRunId);
+    const period = run ? periods.find((p) => p.id === run.payrollPeriodId) : null;
+    const month = period?.month ?? run?.month;
+    const year = period?.year ?? run?.year;
+    if (month && year) {
+      const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December',
+      ];
+      return `${monthNames[month - 1] || month} ${year}`;
+    }
+    return slip.payrollRunId;
+  };
 
   // If employee role, show only their published slips
   if (isEmployeeRole) {
@@ -105,7 +128,7 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
                   publishedSlips.map((slip) => (
                     <tr key={slip.id} className="hover:bg-[#faf9f5]">
                       <td className="py-3 px-4 font-bold text-[#1c2120] font-mono">
-                        {slip.id.includes('2026-10') ? 'October 2026' : 'November 2026'}
+                        {getPeriodLabel(slip)}
                       </td>
                       <td className="py-3 px-4 font-mono font-medium">{formatBDT(slip.grossAmount)}</td>
                       <td className="py-3 px-4 font-mono text-amber-800">{formatBDT(slip.totalDeductions)}</td>
@@ -246,6 +269,13 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
         paymentDate,
         actor: { userId: currentUser.id, name: currentUser.fullName },
       });
+      // Synchronize with backend API in background
+      apiRecordPayment({
+        payrollItemId: paymentModalItem.id,
+        paymentMethod,
+        paymentReference: paymentRef,
+        paymentDate,
+      }).catch(() => {});
       setPaymentModalItem(null);
       setPaymentRef('');
     } catch (err: any) {

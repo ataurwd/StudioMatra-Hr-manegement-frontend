@@ -109,6 +109,13 @@ class StudioMatraDatabase {
               }
             }
           }
+          if (parsed.payrollItems) {
+            for (const item of parsed.payrollItems) {
+              if (item.paymentStatus === 'paid' && !item.publishedAt) {
+                item.publishedAt = new Date().toISOString();
+              }
+            }
+          }
           return parsed;
         }
       }
@@ -1513,7 +1520,35 @@ class StudioMatraDatabase {
   }
 
   public getEmployeePublishedPayslips(employeeId: string): PayrollItem[] {
-    return this.state.payrollItems.filter((i) => i.employeeId === employeeId && Boolean(i.publishedAt));
+    return this.state.payrollItems
+      .filter((i) => i.employeeId === employeeId && (Boolean(i.publishedAt) || i.paymentStatus === 'paid'))
+      .sort((a, b) => {
+        // Priority 1: Paid items before unpaid items
+        if (a.paymentStatus !== b.paymentStatus) {
+          return a.paymentStatus === 'paid' ? -1 : 1;
+        }
+
+        // Priority 2: Most recently published or paid timestamp descending
+        const timeB = new Date(b.publishedAt || (b.paymentDate ? `${b.paymentDate}T12:00:00Z` : 0)).getTime();
+        const timeA = new Date(a.publishedAt || (a.paymentDate ? `${a.paymentDate}T12:00:00Z` : 0)).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+
+        // Priority 3: Payroll run year and month descending
+        const runA = this.state.payrollRuns.find((r) => r.id === a.payrollRunId);
+        const runB = this.state.payrollRuns.find((r) => r.id === b.payrollRunId);
+        const periodA = this.state.payrollPeriods.find((p) => p.id === runA?.payrollPeriodId);
+        const periodB = this.state.payrollPeriods.find((p) => p.id === runB?.payrollPeriodId);
+
+        const yearA = periodA?.year ?? runA?.year ?? 0;
+        const monthA = periodA?.month ?? runA?.month ?? 0;
+        const yearB = periodB?.year ?? runB?.year ?? 0;
+        const monthB = periodB?.month ?? runB?.month ?? 0;
+
+        if (yearA !== yearB) return yearB - yearA;
+        if (monthA !== monthB) return monthB - monthA;
+
+        return b.id.localeCompare(a.id);
+      });
   }
 
   public getSalaryContracts(): SalaryContract[] {
@@ -1965,6 +2000,17 @@ class StudioMatraDatabase {
     item.paymentMethod = paymentMethod;
     item.paymentReference = paymentReference;
     item.paymentDate = paymentDate;
+    item.publishedAt = new Date().toISOString();
+
+    const emp = this.getEmployeeById(item.employeeId);
+    if (emp) {
+      this.createNotification({
+        recipientUserId: emp.userId,
+        title: 'Salary Disbursed / বেতন পরিশোধ',
+        message: `Your salary payment of ৳${item.netAmount.toLocaleString('en-IN')} has been disbursed via ${paymentMethod.replace('_', ' ')} (Ref: ${paymentReference}). You can now view and download your official payslip.`,
+        type: 'payroll',
+      });
+    }
 
     this.logAudit(actor, {
       targetType: 'payroll',

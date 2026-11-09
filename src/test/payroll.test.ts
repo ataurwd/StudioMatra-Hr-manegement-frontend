@@ -12,6 +12,7 @@ import {
   PayrollCalculationInput
 } from '../utils/payrollCalculator';
 import { PayrollPolicy, SalaryContract } from '../types';
+import { db } from '../db/database';
 
 const defaultPolicy: PayrollPolicy = {
   id: 'policy-1',
@@ -331,3 +332,38 @@ test('Negative net pay protection clamps to 0 and logs exception', () => {
   assert.equal(payrollItem.netAmount, 0);
   assert.equal(exceptions.some(e => e.includes('Negative Net Pay Exception')), true);
 });
+
+test('Employee can see paid payslip on dashboard even if period is in CALCULATED or DRAFT status', () => {
+  const actor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' };
+
+  // Create a period and calculate payroll
+  const period = db.createPayrollPeriod(3, 2026, actor);
+  const run = db.calculateDraftPayroll(period.id, actor);
+  assert.equal(run.status, 'calculated');
+
+  // Ar. Iqbal Hossain is emp-0003
+  const items = db.getPayrollItems(run.id);
+  const iqbalItem = items.find((i: any) => i.employeeId === 'emp-0003');
+  assert.ok(iqbalItem, 'Iqbal item must exist in draft calculation');
+  assert.equal(iqbalItem.paymentStatus, 'unpaid');
+
+  // Admin marks Iqbal as PAID
+  db.recordPayment({
+    payrollItemId: iqbalItem.id,
+    paymentMethod: 'bank_transfer',
+    paymentReference: 'EBL-TRX-123456',
+    paymentDate: '2026-03-09',
+    actor,
+  });
+
+  // Verify getEmployeePublishedPayslips returns Iqbal's paid payslip
+  const publishedSlips = db.getEmployeePublishedPayslips('emp-0003');
+  assert.ok(publishedSlips.length > 0, 'Published payslips must contain at least 1 item');
+
+  const latestSlip = publishedSlips[0];
+  assert.equal(latestSlip.id, iqbalItem.id);
+  assert.equal(latestSlip.paymentStatus, 'paid');
+  assert.equal(latestSlip.paymentReference, 'EBL-TRX-123456');
+  assert.ok(latestSlip.publishedAt, 'publishedAt must be automatically set');
+});
+

@@ -174,4 +174,28 @@ export async function apiAdminDeleteAttendance(sessionId: string): Promise<boole
   }
 }
 
+export async function apiRecordPayment(params: {
+  payrollItemId: string;
+  paymentMethod: 'bank_transfer' | 'bkash' | 'cash';
+  paymentReference: string;
+  paymentDate: string;
+}): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/items/${params.payrollItemId}/payment`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paymentStatus: 'paid',
+        paymentDate: params.paymentDate,
+        paymentReference: params.paymentReference,
+        paymentMethod: params.paymentMethod,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+
 
