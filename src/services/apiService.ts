@@ -311,6 +311,35 @@ export async function apiUpdateLeaveBalances(balances: LeaveBalance[]): Promise<
   }
 }
 
+// --- Shift Management ---
+export async function apiGetShifts(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE}/settings/shifts`);
+    if (!res.ok) return [];
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function apiUpdateShift(shiftId: string, updates: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/settings/shifts/${shiftId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 // --- Payroll Management ---
 export async function apiCreatePayrollPeriod(month: number, year: number, name?: string): Promise<any> {
   try {

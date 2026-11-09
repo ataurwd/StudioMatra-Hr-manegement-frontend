@@ -102,6 +102,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser }) => {
       }
       case 'late_arrival': {
         const headers = ['Date', 'Employee Code', 'Full Name', 'Check-In Time', 'Late Minutes', 'Shift Start'];
+        const shiftObj = db.getShifts()[0];
+        const shiftStartLabel = `${shiftObj?.startTime || '10:15'}`;
         const rows = sessions.filter((s) => s.lateMinutes > 0).map((s) => {
           const emp = employees.find((e) => e.id === s.employeeId);
           return [
@@ -110,7 +112,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser }) => {
             emp?.fullName || '',
             new Date(s.checkInAt).toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' }),
             s.lateMinutes,
-            '09:00 AM',
+            shiftStartLabel,
           ];
         });
         downloadCSV('Studio_Matra_Late_Arrival_Report.csv', headers, rows);
@@ -324,7 +326,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser }) => {
                           {new Date(s.checkInAt).toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' })}
                         </td>
                         <td className="py-2.5 px-3 font-bold text-amber-800">{s.lateMinutes} mins late</td>
-                        <td className="py-2.5 px-3 font-mono">09:00 AM (10m Grace)</td>
+                        <td className="py-2.5 px-3 font-mono">{db.getShifts()[0]?.startTime || '10:15'} (10m Grace)</td>
                       </tr>
                     );
                   })}

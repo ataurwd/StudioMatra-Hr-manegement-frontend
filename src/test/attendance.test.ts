@@ -222,7 +222,47 @@ test('Missing punch out session is counted as Present and credits standard work 
   // Missing punch should be classified as present/late and credited standard minutes
   assert.equal(retrieved.isMissingPunch, true);
   assert.ok(retrieved.computedStatus === 'present' || retrieved.computedStatus === 'late');
-  assert.equal(retrieved.workedMinutes, 480);
+  assert.equal(retrieved.workedMinutes, retrieved.scheduledMinutes || 495);
+});
+
+test('Official Studio shift is 10:15 AM to 07:30 PM (10:15 - 19:30)', () => {
+  const shifts = db.getShifts();
+  assert.ok(shifts.length > 0);
+  const mainShift = shifts[0];
+  assert.equal(mainShift.startTime, '10:15');
+  assert.equal(mainShift.endTime, '19:30');
+});
+
+test('Admin updating shift schedule propagates dynamically everywhere', () => {
+  const shifts = db.getShifts();
+  const mainShift = shifts[0];
+
+  // Admin updates shift to custom hours
+  db.updateShift(
+    mainShift.id,
+    { startTime: '10:30', endTime: '19:45' },
+    { userId: 'user-0001', name: 'Super Admin' }
+  );
+
+  const updatedShifts = db.getShifts();
+  const updatedShift = updatedShifts.find((s) => s.id === mainShift.id)!;
+  assert.equal(updatedShift.startTime, '10:30');
+  assert.equal(updatedShift.endTime, '19:45');
+
+  // Check on-time check-in against new 10:30 shift
+  // 10:35 AM Dhaka (within 10m grace of 10:30) is 04:35 UTC
+  const onTimeCheckIn = new Date('2026-11-04T04:35:00.000Z');
+  const metrics = calculateCheckInMetrics(onTimeCheckIn, updatedShift);
+  assert.equal(metrics.isLate, false);
+
+  // Restore back to official 10:15 - 19:30
+  db.updateShift(
+    mainShift.id,
+    { startTime: '10:15', endTime: '19:30' },
+    { userId: 'user-0001', name: 'Super Admin' }
+  );
+  assert.equal(db.getShifts()[0].startTime, '10:15');
+  assert.equal(db.getShifts()[0].endTime, '19:30');
 });
 
 

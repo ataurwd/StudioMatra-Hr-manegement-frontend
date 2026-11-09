@@ -57,8 +57,8 @@ export const AdminAttendanceEditModal: React.FC<AdminAttendanceEditModalProps> =
     }
   };
 
-  const initialCheckIn = getDhakaTime(existingSession?.checkInAt, '09:00');
-  const initialCheckOut = getDhakaTime(existingSession?.checkOutAt, '18:00');
+  const initialCheckIn = getDhakaTime(existingSession?.checkInAt, shift?.startTime || '10:15');
+  const initialCheckOut = getDhakaTime(existingSession?.checkOutAt, shift?.endTime || '19:30');
 
   const [status, setStatus] = useState<AttendanceStatus>(
     existingSession?.computedStatus || 'present'
@@ -98,7 +98,7 @@ export const AdminAttendanceEditModal: React.FC<AdminAttendanceEditModalProps> =
     if (!checkIn) return { workedMin: 0, lateMin: 0, overtimeMin: 0, earlyMin: 0 };
 
     const [inH, inM] = checkIn.split(':').map(Number);
-    const [shiftH, shiftM] = (shift?.startTime || '09:00').split(':').map(Number);
+    const [shiftH, shiftM] = (shift?.startTime || '10:15').split(':').map(Number);
     const shiftStartMin = shiftH * 60 + shiftM;
     const checkInMin = inH * 60 + inM;
     const graceMin = shiftStartMin + (shift?.graceMinutes || 10);
@@ -116,7 +116,7 @@ export const AdminAttendanceEditModal: React.FC<AdminAttendanceEditModalProps> =
         const rawDuration = checkOutMin - checkInMin;
         workedMin = Math.max(0, rawDuration - (breakMinutes || 0));
 
-        const [shiftEndH, shiftEndM] = (shift?.endTime || '18:00').split(':').map(Number);
+        const [shiftEndH, shiftEndM] = (shift?.endTime || '19:30').split(':').map(Number);
         const shiftEndMin = shiftEndH * 60 + shiftEndM;
 
         if (checkOutMin < shiftEndMin) {
@@ -132,22 +132,24 @@ export const AdminAttendanceEditModal: React.FC<AdminAttendanceEditModalProps> =
 
   const handleApplyPreset = (type: 'present' | 'late' | 'half_day' | 'absent') => {
     setErrorMsg('');
+    const sStart = shift?.startTime || '10:15';
+    const sEnd = shift?.endTime || '19:30';
     if (type === 'present') {
       setStatus('present');
-      setCheckIn('09:00');
-      setCheckOut('18:00');
+      setCheckIn(sStart);
+      setCheckOut(sEnd);
       setBreakMinutes(60);
-      setNotes('Standard 8-hour workday recorded by Admin');
+      setNotes('Standard workday recorded by Admin');
     } else if (type === 'late') {
       setStatus('late');
-      setCheckIn('09:30');
-      setCheckOut('18:00');
+      setCheckIn('10:45');
+      setCheckOut(sEnd);
       setBreakMinutes(60);
       setNotes('Late arrival (grace period exceeded) recorded by Admin');
     } else if (type === 'half_day') {
       setStatus('half_day');
-      setCheckIn('09:00');
-      setCheckOut('13:30');
+      setCheckIn(sStart);
+      setCheckOut('15:00');
       setBreakMinutes(0);
       setNotes('Half-day attendance approved by Admin');
     } else if (type === 'absent') {
@@ -383,7 +385,7 @@ export const AdminAttendanceEditModal: React.FC<AdminAttendanceEditModalProps> =
                 />
                 <div className="flex items-center gap-1 mt-1 text-[10px] text-[#788480]">
                   <span>Quick:</span>
-                  {['08:55', '09:00', '09:15', '09:30'].map((t) => (
+                  {['10:10', '10:15', '10:25', '10:45'].map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -409,7 +411,7 @@ export const AdminAttendanceEditModal: React.FC<AdminAttendanceEditModalProps> =
                 />
                 <div className="flex items-center gap-1 mt-1 text-[10px] text-[#788480]">
                   <span>Quick:</span>
-                  {['17:30', '18:00', '18:30', '19:00'].map((t) => (
+                  {['19:00', '19:30', '19:45', '20:00'].map((t) => (
                     <button
                       key={t}
                       type="button"

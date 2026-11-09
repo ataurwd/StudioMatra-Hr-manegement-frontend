@@ -122,6 +122,14 @@ class StudioMatraDatabase {
               }
             }
           }
+          if (parsed.shifts) {
+            for (const s of parsed.shifts) {
+              if (s.id === 'shift-standard' && s.startTime === '09:00' && s.endTime === '18:00') {
+                s.startTime = '10:15';
+                s.endTime = '19:30';
+              }
+            }
+          }
           return parsed;
         }
       }
@@ -689,11 +697,13 @@ class StudioMatraDatabase {
     const nowIso = new Date().toISOString();
     const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
 
-    // Calculate late metrics
+    // Calculate late metrics & scheduled shift duration dynamically
     const { lateMinutes, isLate } = calculateCheckInMetrics(nowIso, shift);
-    const shiftStart = 9 * 60;
-    const shiftEnd = 18 * 60;
-    const scheduledMinutes = shiftEnd - shiftStart - shift.breakMinutes;
+    const [startH, startM] = (shift.startTime || '10:15').split(':').map(Number);
+    const [endH, endM] = (shift.endTime || '19:30').split(':').map(Number);
+    const shiftStart = startH * 60 + startM;
+    const shiftEnd = endH * 60 + endM;
+    const scheduledMinutes = Math.max(0, shiftEnd - shiftStart - (shift.breakMinutes || 60));
 
     const sessionId = 'sess-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5);
 

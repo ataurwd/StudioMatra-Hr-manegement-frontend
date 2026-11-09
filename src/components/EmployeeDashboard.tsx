@@ -326,7 +326,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
             <div>
               <p className="text-[11px] text-[#76807c]">Scheduled Shift</p>
               <p className="text-sm font-semibold text-[#1c2120] font-mono mt-0.5">
-                09:00 – 18:00
+                {shift?.startTime || '10:15'} – {shift?.endTime || '19:30'}
               </p>
             </div>
           </div>

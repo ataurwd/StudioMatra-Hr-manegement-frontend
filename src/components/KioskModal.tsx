@@ -482,7 +482,14 @@ export const KioskModal: React.FC<KioskModalProps> = ({ isOpen, onClose }) => {
                   {selectedEmployee.employeeCode}
                 </span>
                 <h3 className="text-xl font-bold text-white mt-1 truncate">{selectedEmployee.fullName}</h3>
-                <p className="text-xs text-[#879691]">Shift: Studio General (09:00 - 18:00)</p>
+                {(() => {
+                  const empShift = db.getShifts().find((s) => s.id === selectedEmployee.shiftId) || db.getShifts()[0];
+                  return (
+                    <p className="text-xs text-[#879691]">
+                      Shift: {empShift?.name || 'Studio General'} ({empShift?.startTime || '10:15'} - {empShift?.endTime || '19:30'})
+                    </p>
+                  );
+                })()}
               </div>
             </div>
 

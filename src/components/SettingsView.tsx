@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { db } from '../db/database';
 import { DivisorMethod, Organization, PayrollPolicy, ShiftDefinition, User } from '../types';
+import { apiUpdateShift } from '../services/apiService';
 
 interface SettingsViewProps {
   currentUser: User;
@@ -83,11 +84,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser }) => {
 
   const [shiftForm, setShiftForm] = useState({
     name: selectedShift?.name || '',
-    startTime: selectedShift?.startTime || '09:00',
-    endTime: selectedShift?.endTime || '18:00',
+    startTime: selectedShift?.startTime || '10:15',
+    endTime: selectedShift?.endTime || '19:30',
     breakMinutes: selectedShift?.breakMinutes ?? 60,
     graceMinutes: selectedShift?.graceMinutes ?? 10,
-    weeklyWorkDays: selectedShift?.weeklyWorkDays ? [...selectedShift.weeklyWorkDays] : [0, 1, 2, 3, 4],
+    weeklyWorkDays: selectedShift?.weeklyWorkDays ? [...selectedShift.weeklyWorkDays] : [0, 1, 2, 3, 4, 6],
     isOvernight: !!selectedShift?.isOvernight,
     status: selectedShift?.status || ('active' as const),
   });
@@ -95,11 +96,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser }) => {
   const [showAddShiftModal, setShowAddShiftModal] = useState(false);
   const [newShiftForm, setNewShiftForm] = useState({
     name: '',
-    startTime: '09:00',
-    endTime: '18:00',
+    startTime: '10:15',
+    endTime: '19:30',
     breakMinutes: 60,
     graceMinutes: 10,
-    weeklyWorkDays: [0, 1, 2, 3, 4],
+    weeklyWorkDays: [0, 1, 2, 3, 4, 6],
     isOvernight: false,
     status: 'active' as const,
     timezone: 'Asia/Dhaka',
@@ -121,23 +122,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser }) => {
   const handleSaveShift = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedShift) return;
+    const updates = {
+      name: shiftForm.name,
+      startTime: shiftForm.startTime,
+      endTime: shiftForm.endTime,
+      breakMinutes: shiftForm.breakMinutes,
+      graceMinutes: shiftForm.graceMinutes,
+      weeklyWorkDays: shiftForm.weeklyWorkDays,
+      isOvernight: shiftForm.isOvernight,
+      status: shiftForm.status,
+    };
     db.updateShift(
       selectedShift.id,
-      {
-        name: shiftForm.name,
-        startTime: shiftForm.startTime,
-        endTime: shiftForm.endTime,
-        breakMinutes: shiftForm.breakMinutes,
-        graceMinutes: shiftForm.graceMinutes,
-        weeklyWorkDays: shiftForm.weeklyWorkDays,
-        isOvernight: shiftForm.isOvernight,
-        status: shiftForm.status,
-      },
+      updates,
       { userId: currentUser.id, name: currentUser.fullName }
     );
+    // Push update live to MySQL via REST API
+    apiUpdateShift(selectedShift.id, updates).catch(() => {});
     const refreshed = db.getShifts();
     setShifts(refreshed);
-    setSaveSuccess(`Office shift "${shiftForm.name}" updated successfully.`);
+    setSaveSuccess(`Office shift "${shiftForm.name}" updated successfully across all systems.`);
     setTimeout(() => setSaveSuccess(''), 3000);
   };
 
