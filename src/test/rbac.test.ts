@@ -140,11 +140,21 @@ test('updateLeaveBalance allows admin to adjust quota and recalculate remaining 
 });
 
 test('updateLeaveRequest allows admin to modify dates and status of existing application', () => {
-  const actor = { userId: 'user-0001', name: 'Ar. Nahid Rahman' };
-  const requests = db.getLeaveRequests();
-  assert.ok(requests.length > 0);
+  const actor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' };
+  const target = db.applyLeave(
+    {
+      employeeId: 'emp-0003',
+      leaveTypeId: 'lt-casual',
+      startDate: '2026-11-20',
+      endDate: '2026-11-21',
+      durationDays: 2,
+      isHalfDay: false,
+      reason: 'Personal reason',
+    },
+    actor
+  );
+  assert.ok(target.id);
 
-  const target = requests[0];
   const updated = db.updateLeaveRequest(
     {
       requestId: target.id,
@@ -159,7 +169,7 @@ test('updateLeaveRequest allows admin to modify dates and status of existing app
 });
 
 test('createEmployee with custom kiosk PIN and updateEmployeePin work as expected', () => {
-  const actor = { userId: 'user-0001', name: 'Ar. Nahid Rahman' };
+  const actor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' };
 
   const created = db.createEmployee(
     {

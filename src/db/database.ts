@@ -56,7 +56,7 @@ import {
   SEED_CORRECTION_REQUESTS,
 } from './seedData';
 
-const STORAGE_KEY_PREFIX = 'studio_matra_db_v1_';
+const STORAGE_KEY_PREFIX = 'studio_matra_db_v4_';
 
 interface DatabaseSchema {
   organization: Organization;
@@ -100,15 +100,17 @@ class StudioMatraDatabase {
       const stored = localStorage.getItem(STORAGE_KEY_PREFIX + 'master');
       if (stored) {
         const parsed: DatabaseSchema = JSON.parse(stored);
-        // Ensure default passwords for any user without a password
-        if (parsed.users) {
-          for (const u of parsed.users) {
-            if (!u.password) {
-              u.password = 'matra1234';
+        // Ensure current 6 studio employees are present
+        if (parsed.employees && parsed.employees.some((e) => e.fullName.includes('Ishtiaque'))) {
+          if (parsed.users) {
+            for (const u of parsed.users) {
+              if (!u.password) {
+                u.password = 'matra1234';
+              }
             }
           }
+          return parsed;
         }
-        return parsed;
       }
     } catch (e) {
       console.warn('Failed to load database from localStorage, resetting to seed data', e);
@@ -143,16 +145,16 @@ class StudioMatraDatabase {
       versionNumber: 1,
       status: 'finalized',
       totalEmployees: SEED_EMPLOYEES.length,
-      totalGross: 519500,
-      totalDeductions: 5000,
-      totalNet: 514500,
+      totalGross: 328000,
+      totalDeductions: 0,
+      totalNet: 328000,
       calculatedAt: '2026-10-31T18:00:00Z',
-      calculatedBy: 'Rafiqul Islam',
-      reviewedBy: 'Rafiqul Islam',
+      calculatedBy: 'IAr. Mohit Md. Mofiz',
+      reviewedBy: 'IAr. Mohit Md. Mofiz',
       reviewedAt: '2026-10-31T19:00:00Z',
-      approvedBy: 'Ar. Nahid Rahman',
+      approvedBy: 'IAr. Md. Ishtiaque Haque',
       approvedAt: '2026-11-01T10:00:00Z',
-      finalizedBy: 'Rafiqul Islam',
+      finalizedBy: 'IAr. Mohit Md. Mofiz',
       finalizedAt: '2026-11-01T11:00:00Z',
     };
 

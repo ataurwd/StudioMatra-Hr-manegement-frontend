@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { db } from '../db/database';
-import { Department, Designation, Employee, RoleName, SalaryContract, ShiftDefinition, User } from '../types';
+import { Department, Designation, Employee, EmploymentType, RoleName, SalaryContract, ShiftDefinition, User } from '../types';
 import { canViewSalary, hasPermission } from '../utils/permissions';
 import { formatBDT } from '../utils/money';
 
@@ -55,9 +55,12 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('+880 1711-');
   const [departmentId, setDepartmentId] = useState('dept-arch');
-  const [designationId, setDesignationId] = useState('des-sr-arch');
+  const [designationId, setDesignationId] = useState('des-3d-intern');
+  const [addCustomDesignation, setAddCustomDesignation] = useState('');
+  const [addEmploymentType, setAddEmploymentType] = useState<EmploymentType>('full_time');
+  const [addAdhocJobTitle, setAddAdhocJobTitle] = useState('');
   const [joiningDate, setJoiningDate] = useState(new Date().toISOString().split('T')[0]);
-  const [basicSalary, setBasicSalary] = useState(45000);
+  const [basicSalary, setBasicSalary] = useState(15000);
   const [pinCode, setPinCode] = useState('1111');
   const [accountPassword, setAccountPassword] = useState('matra1234');
   const [assignedRole, setAssignedRole] = useState<RoleName>('employee');
@@ -109,9 +112,11 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
           phone,
           departmentId,
           designationId,
+          customDesignation: addCustomDesignation.trim() || undefined,
           joiningDate,
           employmentStatus: 'active',
-          employmentType: 'full_time',
+          employmentType: addEmploymentType,
+          adhocJobTitle: addEmploymentType === 'adhoc' || addAdhocJobTitle.trim() ? addAdhocJobTitle.trim() : undefined,
           shiftId: 'shift-standard',
           emergencyContact: {
             name: 'Emergency Contact',
@@ -297,9 +302,16 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
 
                 <div className="mt-4 space-y-2 text-xs text-[#505a56]">
                   <div className="flex items-center gap-2">
-                    <Briefcase className="w-3.5 h-3.5 text-[#1b4332]" />
-                    <span className="font-medium text-[#1c2120]">{des?.title}</span>
+                    <Briefcase className="w-3.5 h-3.5 text-[#CAA05C]" />
+                    <span className="font-semibold text-[#1c2120]">{emp.customDesignation || des?.title}</span>
                   </div>
+                  {emp.employmentType === 'adhoc' && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200">
+                        Ad-hoc Job {emp.adhocJobTitle ? `• ${emp.adhocJobTitle}` : ''}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Building className="w-3.5 h-3.5 text-[#737e7a]" />
                     <span>{dept?.name}</span>
@@ -399,8 +411,14 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
                 <div>
                   <p className="text-[10px] text-[#717b77] uppercase font-bold">Designation</p>
                   <p className="font-semibold text-[#1c2120] mt-0.5">
-                    {designations.find((d) => d.id === selectedEmployee.designationId)?.title}
+                    {selectedEmployee.customDesignation ||
+                      designations.find((d) => d.id === selectedEmployee.designationId)?.title}
                   </p>
+                  {selectedEmployee.employmentType === 'adhoc' && (
+                    <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200">
+                      Ad-hoc Job {selectedEmployee.adhocJobTitle ? `• ${selectedEmployee.adhocJobTitle}` : ''}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <p className="text-[10px] text-[#717b77] uppercase font-bold">Joining Date</p>
@@ -688,7 +706,34 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#505a56] mb-1">
+                  Or Custom Designation Title / পদবী টাইপ করুন (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Senior 3D Visualiser, Lead Architect..."
+                  value={addCustomDesignation}
+                  onChange={(e) => setAddCustomDesignation(e.target.value)}
+                  className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-[#faf9f5] text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-[#1c2120] mb-1">Employment Type</label>
+                  <select
+                    value={addEmploymentType}
+                    onChange={(e) => setAddEmploymentType(e.target.value as any)}
+                    className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-[#faf9f5]"
+                  >
+                    <option value="full_time">Full-Time Regular</option>
+                    <option value="contractual">Contractual</option>
+                    <option value="intern">Intern</option>
+                    <option value="adhoc">Ad-hoc Job (এডহক জব)</option>
+                    <option value="consultant">Consultant</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block font-bold text-[#1c2120] mb-1">Joining Date</label>
                   <input
@@ -710,6 +755,21 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
                   />
                 </div>
               </div>
+
+              {addEmploymentType === 'adhoc' && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-1">
+                  <label className="block text-xs font-bold text-purple-900">
+                    Ad-hoc Job / Project Assignment Details (এডহক প্রজেক্ট / কাজের বিবরণ)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Banani Residential Drafting & 3D Render Handover"
+                    value={addAdhocJobTitle}
+                    onChange={(e) => setAddAdhocJobTitle(e.target.value)}
+                    className="w-full p-2 border border-purple-300 rounded-lg bg-white text-xs text-purple-900 font-medium"
+                  />
+                </div>
+              )}
 
               {/* Studio Portal Login Credentials */}
               <div className="p-3.5 bg-[#faf9f5] rounded-xl border border-[#ece7dc] space-y-3">
@@ -860,8 +920,14 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   const [phone, setPhone] = useState(employee.phone);
   const [departmentId, setDepartmentId] = useState(employee.departmentId);
   const [designationId, setDesignationId] = useState(employee.designationId);
+  const [customDesignation, setCustomDesignation] = useState(
+    employee.customDesignation ||
+      designations.find((d) => d.id === employee.designationId)?.title ||
+      ''
+  );
   const [employmentStatus, setEmploymentStatus] = useState(employee.employmentStatus);
-  const [employmentType, setEmploymentType] = useState(employee.employmentType);
+  const [employmentType, setEmploymentType] = useState<EmploymentType>(employee.employmentType);
+  const [adhocJobTitle, setAdhocJobTitle] = useState(employee.adhocJobTitle || '');
   const [shiftId, setShiftId] = useState(employee.shiftId || 'shift-standard');
 
   // Emergency Contact
@@ -928,8 +994,10 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
           phone,
           departmentId,
           designationId,
+          customDesignation: customDesignation.trim() || undefined,
           employmentStatus,
           employmentType,
+          adhocJobTitle: employmentType === 'adhoc' || adhocJobTitle.trim() ? adhocJobTitle.trim() : undefined,
           shiftId,
           emergencyContact: {
             name: emergencyName,
@@ -1119,10 +1187,14 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-[#1c2120] mb-1">Designation</label>
+                  <label className="block font-bold text-[#1c2120] mb-1">Standard Designation</label>
                   <select
                     value={designationId}
-                    onChange={(e) => setDesignationId(e.target.value)}
+                    onChange={(e) => {
+                      setDesignationId(e.target.value);
+                      const match = designations.find((d) => d.id === e.target.value);
+                      if (match) setCustomDesignation(match.title);
+                    }}
                     className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-[#faf9f5]"
                   >
                     {designations.map((d) => (
@@ -1132,6 +1204,22 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#505a56] mb-1">
+                  Official Designation Title / পদবী পরিবর্তন করুন (Admin Direct Edit)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Principal Architect (Intern) or 3D Visualiser (Intern)"
+                  value={customDesignation}
+                  onChange={(e) => setCustomDesignation(e.target.value)}
+                  className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-white text-xs font-bold text-[#1c2120]"
+                />
+                <p className="text-[10px] text-[#717b77] mt-0.5">
+                  This title is displayed on the employee's dashboard, attendance calendar, and studio directory.
+                </p>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
@@ -1158,6 +1246,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                     <option value="full_time">Full-Time Regular</option>
                     <option value="contractual">Contractual</option>
                     <option value="intern">Intern</option>
+                    <option value="adhoc">Ad-hoc Job (এডহক জব)</option>
                     <option value="consultant">Consultant</option>
                   </select>
                 </div>
@@ -1176,6 +1265,24 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                   </select>
                 </div>
               </div>
+
+              {employmentType === 'adhoc' && (
+                <div className="p-3.5 bg-purple-50 border border-purple-200 rounded-xl space-y-1">
+                  <label className="block text-xs font-bold text-purple-900">
+                    Ad-hoc Job / Project Assignment Details (এডহক প্রজেক্ট / কাজের বিবরণ)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Banani Residential Drafting & 3D Render Handover"
+                    value={adhocJobTitle}
+                    onChange={(e) => setAdhocJobTitle(e.target.value)}
+                    className="w-full p-2 border border-purple-300 rounded-lg bg-white text-xs text-purple-900 font-medium"
+                  />
+                  <p className="text-[10px] text-purple-700">
+                    This project note will be shown on the employee's personal dashboard banner.
+                  </p>
+                </div>
+              )}
 
               {/* Kiosk Attendance PIN Card */}
               {canManageEmployees && (

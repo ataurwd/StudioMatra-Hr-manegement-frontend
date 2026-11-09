@@ -92,6 +92,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
 
   const dept = db.getDepartments().find((d) => d.id === employee.departmentId);
   const des = db.getDesignations().find((d) => d.id === employee.designationId);
+  const desTitle = employee.customDesignation || des?.title || 'Studio Personnel';
   const shift = db.getShifts().find((s) => s.id === employee.shiftId) || db.getShifts()[0];
   const leaveBalances = db.getLeaveBalances(employee.id);
   const recentSessions = db.getAttendanceSessions({ employeeId: employee.id }).slice(0, 5);
@@ -176,15 +177,23 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
       {/* Welcome Banner */}
       <div className="bg-white rounded-2xl p-6 border border-[#e8e4da] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="text-xs uppercase tracking-wider font-bold text-[#8f6927] bg-[#f7efe0] border border-[#ebd8b7] px-2.5 py-0.5 rounded-full">
               {employee.employeeCode}
             </span>
+            <span className="text-xs font-bold text-[#1c2120] bg-[#faf3e7] border border-[#ebd8b7] px-2.5 py-0.5 rounded-full">
+              {desTitle}
+            </span>
+            {employee.employmentType === 'adhoc' && (
+              <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-full">
+                Ad-hoc Job {employee.adhocJobTitle ? `• ${employee.adhocJobTitle}` : ''}
+              </span>
+            )}
             <span className="text-xs text-[#7d8783]">• {dept?.name}</span>
           </div>
           <h1 className="text-2xl font-serif font-bold text-[#1a201e]">Welcome, {employee.fullName}</h1>
           <p className="text-xs text-[#66706c] mt-0.5">
-            {des?.title} • Shift: {shift.name} ({shift.startTime} – {shift.endTime})
+            <strong className="text-[#CAA05C] font-semibold">{desTitle}</strong> • Shift: {shift.name} ({shift.startTime} – {shift.endTime})
           </p>
         </div>
 
@@ -214,6 +223,33 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Ad-hoc Job Assignment Notice */}
+      {employee.employmentType === 'adhoc' && (
+        <div className="bg-gradient-to-r from-purple-50 via-white to-[#faf7f0] border border-purple-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-700 font-bold text-sm shrink-0">
+              AD
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-purple-900 bg-purple-100/80 px-2 py-0.5 rounded uppercase tracking-wider">
+                  Ad-hoc Project Assignment / এডহক কাজ
+                </span>
+              </div>
+              <p className="text-base font-bold text-[#1c2120] mt-0.5">
+                {employee.adhocJobTitle || 'Special Architectural & Design Project'}
+              </p>
+              <p className="text-xs text-[#6e7774]">
+                Assigned under Studio Matra project contract guidelines.
+              </p>
+            </div>
+          </div>
+          <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-purple-600 text-white shadow-xs self-start sm:self-auto">
+            Active Ad-hoc
+          </span>
+        </div>
+      )}
 
       {/* Main Attendance Card */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

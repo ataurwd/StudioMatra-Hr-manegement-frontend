@@ -3,7 +3,7 @@ import { db } from '../db/database';
 import { NotificationItem, User } from '../types';
 import { schedulePushToBackend, syncWithBackend } from '../services/apiService';
 
-const AUTH_STORAGE_KEY = 'studio_matra_auth_user_v1';
+const AUTH_STORAGE_KEY = 'studio_matra_auth_user_v4';
 
 interface AppContextType {
   currentUser: User | null;

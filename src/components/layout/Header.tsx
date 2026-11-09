@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { getRoleBadge } from '../../utils/permissions';
+import { db } from '../../db/database';
 
 export const Header: React.FC = () => {
   const {
@@ -34,6 +35,11 @@ export const Header: React.FC = () => {
   const [dhakaTime, setDhakaTime] = useState<string>('');
   const [dhakaDate, setDhakaDate] = useState<string>('');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
+  const emp = currentUser?.employeeId ? db.getEmployeeById(currentUser.employeeId) : null;
+  const desTitle = emp
+    ? (emp.customDesignation || db.getDesignations().find((d) => d.id === emp.designationId)?.title)
+    : null;
 
   useEffect(() => {
     const updateTime = () => {
@@ -152,7 +158,9 @@ export const Header: React.FC = () => {
               <p className="text-xs font-semibold text-[#1c2120] leading-none">
                 {currentUser?.fullName || 'User'}
               </p>
-              <p className="text-[10px] text-[#6b7370] leading-none mt-0.5">{currentBadge.label}</p>
+              <p className="text-[10px] text-[#CAA05C] font-medium leading-none mt-1">
+                {desTitle ? `${desTitle} • ${currentBadge.label}` : currentBadge.label}
+              </p>
             </div>
           </button>
 
@@ -161,7 +169,15 @@ export const Header: React.FC = () => {
               {/* User Identity Info */}
               <div className="px-4 py-3 border-b border-[#f0ece1]">
                 <p className="text-xs font-bold text-[#1c2120]">{currentUser?.fullName}</p>
-                <p className="text-[11px] text-[#707976] truncate mt-0.5">{currentUser?.email}</p>
+                {desTitle && (
+                  <p className="text-[11px] font-semibold text-[#8f6927] mt-0.5">{desTitle}</p>
+                )}
+                {emp?.employmentType === 'adhoc' && (
+                  <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full border border-purple-200 bg-purple-50 text-purple-700 font-semibold">
+                    Ad-hoc Job{emp.adhocJobTitle ? `: ${emp.adhocJobTitle}` : ''}
+                  </span>
+                )}
+                <p className="text-[11px] text-[#707976] truncate mt-1">{currentUser?.email}</p>
                 <div className="mt-2 flex items-center gap-1.5">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${currentBadge.colorClass}`}>
                     {currentBadge.label}

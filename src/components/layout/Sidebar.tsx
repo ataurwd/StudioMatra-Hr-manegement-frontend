@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { getRoleBadge, hasPermission } from '../../utils/permissions';
+import { db } from '../../db/database';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -112,19 +113,35 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* User Identity Snippet */}
-        <div className="px-5 py-3.5 bg-[#131716] border-b border-[#242b29] flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#CAA05C]/20 border border-[#CAA05C]/40 text-[#CAA05C] font-semibold text-xs flex items-center justify-center">
-            {currentUser?.fullName?.charAt(0) || 'U'}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-white truncate">{currentUser?.fullName || 'User'}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className={`text-[10px] px-1.5 py-0.2 rounded border font-medium ${roleBadge.colorClass}`}>
-                {roleBadge.label}
-              </span>
+        {(() => {
+          const emp = currentUser?.employeeId ? db.getEmployeeById(currentUser.employeeId) : null;
+          const desTitle = emp
+            ? (emp.customDesignation || db.getDesignations().find((d) => d.id === emp.designationId)?.title)
+            : null;
+          return (
+            <div className="px-5 py-3.5 bg-[#131716] border-b border-[#242b29] flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#CAA05C]/20 border border-[#CAA05C]/40 text-[#CAA05C] font-semibold text-xs flex items-center justify-center shrink-0">
+                {currentUser?.fullName?.charAt(0) || 'U'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-white truncate">{currentUser?.fullName || 'User'}</p>
+                {desTitle && (
+                  <p className="text-[10px] text-[#CAA05C] font-medium truncate mt-0.5">{desTitle}</p>
+                )}
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded border font-medium ${roleBadge.colorClass}`}>
+                    {roleBadge.label}
+                  </span>
+                  {emp?.employmentType === 'adhoc' && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded border border-purple-500/40 bg-purple-950/60 text-purple-300 font-medium">
+                      Ad-hoc
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Quick Kiosk Launch Button */}
         <div className="p-3">

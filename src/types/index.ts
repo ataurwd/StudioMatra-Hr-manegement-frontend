@@ -46,7 +46,7 @@ export type AttendanceStatus =
 
 export type EmploymentStatus = 'active' | 'probationary' | 'resigned' | 'inactive' | 'archived';
 
-export type EmploymentType = 'full_time' | 'contractual' | 'intern' | 'consultant';
+export type EmploymentType = 'full_time' | 'contractual' | 'intern' | 'consultant' | 'adhoc';
 
 export type LeaveStatus = 'pending' | 'manager_approved' | 'approved' | 'rejected' | 'cancelled';
 
@@ -133,6 +133,8 @@ export interface Employee {
     bkashNumber?: string;
   };
   avatarUrl?: string;
+  adhocJobTitle?: string;
+  customDesignation?: string;
   createdAt: string;
 }
 
