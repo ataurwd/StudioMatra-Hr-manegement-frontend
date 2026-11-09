@@ -100,8 +100,14 @@ class StudioMatraDatabase {
       const stored = localStorage.getItem(STORAGE_KEY_PREFIX + 'master');
       if (stored) {
         const parsed: DatabaseSchema = JSON.parse(stored);
-        // Ensure current 6 studio employees are present
-        if (parsed.employees && parsed.employees.some((e) => e.fullName.includes('Ishtiaque'))) {
+        // Ensure current 6 studio employees and valid users are present
+        if (
+          parsed.employees &&
+          parsed.employees.length > 0 &&
+          parsed.users &&
+          parsed.users.length > 0 &&
+          parsed.employees.some((e) => e.fullName.includes('Ishtiaque'))
+        ) {
           if (parsed.users) {
             for (const u of parsed.users) {
               if (!u.password) {
@@ -131,26 +137,26 @@ class StudioMatraDatabase {
   private getInitialSeed(): DatabaseSchema {
     return {
       organization: SEED_ORGANIZATION,
-      users: [],
-      departments: SEED_DEPARTMENTS,
-      designations: SEED_DESIGNATIONS,
-      employees: [],
-      shifts: SEED_SHIFTS,
-      attendanceSessions: [],
-      punchEvents: [],
-      correctionRequests: [],
-      leaveTypes: SEED_LEAVE_TYPES,
-      leaveBalances: [],
-      leaveRequests: [],
-      salaryContracts: [],
-      salaryAdvances: [],
+      users: [...SEED_USERS],
+      departments: [...SEED_DEPARTMENTS],
+      designations: [...SEED_DESIGNATIONS],
+      employees: [...SEED_EMPLOYEES],
+      shifts: [...SEED_SHIFTS],
+      attendanceSessions: [...SEED_ATTENDANCE_SESSIONS],
+      punchEvents: [...SEED_PUNCH_EVENTS],
+      correctionRequests: [...SEED_CORRECTION_REQUESTS],
+      leaveTypes: [...SEED_LEAVE_TYPES],
+      leaveBalances: [...SEED_LEAVE_BALANCES],
+      leaveRequests: [...SEED_LEAVE_REQUESTS],
+      salaryContracts: [...SEED_SALARY_CONTRACTS],
+      salaryAdvances: [...SEED_SALARY_ADVANCES],
       payrollPeriods: [],
       payrollRuns: [],
       payrollItems: [],
       payrollPolicy: SEED_PAYROLL_POLICY,
       settings: SEED_SETTINGS,
-      notifications: [],
-      auditLogs: [],
+      notifications: [...SEED_NOTIFICATIONS],
+      auditLogs: [...SEED_AUDIT_LOGS],
     };
   }
 
@@ -231,6 +237,10 @@ class StudioMatraDatabase {
   // -------------------------------------------------------------
 
   public getUsers(): User[] {
+    if (!this.state.users || this.state.users.length === 0) {
+      this.state.users = [...SEED_USERS];
+      this.persist(this.state);
+    }
     return this.state.users;
   }
 
@@ -245,6 +255,11 @@ class StudioMatraDatabase {
   public authenticateUser(email: string, pass: string): User {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = pass.trim();
+
+    if (!this.state.users || this.state.users.length === 0) {
+      this.state.users = [...SEED_USERS];
+      this.persist(this.state);
+    }
 
     const user = this.state.users.find((u) => u.email.toLowerCase() === cleanEmail);
     if (!user) {
@@ -334,6 +349,10 @@ class StudioMatraDatabase {
   }
 
   public getEmployees(): Employee[] {
+    if (!this.state.employees || this.state.employees.length === 0) {
+      this.state.employees = [...SEED_EMPLOYEES];
+      this.persist(this.state);
+    }
     return this.state.employees;
   }
 

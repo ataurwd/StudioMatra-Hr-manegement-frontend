@@ -128,3 +128,20 @@ test('createEmployee with custom password and role allows immediate login', () =
   // Clean up
   db.deleteEmployee(newEmp.id, { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' });
 });
+
+test('Database self-heals and loads baseline Studio Matra users when state is empty (e.g. Vercel cold start)', () => {
+  // Simulate an empty database state
+  (db as any).state.users = [];
+  assert.equal((db as any).state.users.length, 0);
+
+  // Calling getUsers() must self-heal and return the 6 baseline personnel
+  const users = db.getUsers();
+  assert.equal(users.length, 6);
+  assert.ok(users.some((u) => u.email === 'ishtiaque@studiomatra.com.bd'));
+
+  // authenticateUser must also succeed on empty state
+  (db as any).state.users = [];
+  const authed = db.authenticateUser('ishtiaque@studiomatra.com.bd', 'matra1234');
+  assert.equal(authed.email, 'ishtiaque@studiomatra.com.bd');
+  assert.equal(authed.role, 'super_admin');
+});

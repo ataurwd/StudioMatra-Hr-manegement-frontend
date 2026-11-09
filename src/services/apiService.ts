@@ -23,6 +23,8 @@ export async function checkBackendHealth(): Promise<HealthResponse | null> {
   try {
     const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
     return await res.json();
   } catch {
     return null;
@@ -36,6 +38,8 @@ export async function syncWithBackend(): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/sync/master`, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) return false;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return false;
     const remoteData = await res.json();
     if (remoteData && (remoteData.users?.length > 0 || remoteData.employees?.length > 0)) {
       db.syncFromRemote(remoteData);
@@ -56,6 +60,8 @@ export async function apiLogin(email: string, pass: string): Promise<{ user: Use
       body: JSON.stringify({ email, password: pass }),
     });
     if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
     return await res.json();
   } catch {
     return null;
