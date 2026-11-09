@@ -94,7 +94,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
   const des = db.getDesignations().find((d) => d.id === employee.designationId);
   const desTitle = employee.customDesignation || des?.title || 'Studio Personnel';
   const shift = db.getShifts().find((s) => s.id === employee.shiftId) || db.getShifts()[0];
-  const leaveBalances = db.getLeaveBalances(employee.id);
+  const rawBalances = db.getLeaveBalances(employee.id);
+  const leaveBalances = rawBalances.length > 0
+    ? rawBalances
+    : db.getLeaveTypes().map((lt) => ({
+        id: `lb-${employee.id}-${lt.code.toLowerCase()}`,
+        employeeId: employee.id,
+        leaveTypeId: lt.id,
+        year: 2026,
+        openingBalance: lt.annualQuota,
+        accrued: lt.annualQuota,
+        used: 0,
+        closingBalance: lt.annualQuota,
+      }));
   const recentSessions = db.getAttendanceSessions({ employeeId: employee.id }).slice(0, 5);
   const publishedPayslips = db.getEmployeePublishedPayslips(employee.id);
   const latestPayslip = publishedPayslips[0];
@@ -394,7 +406,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
             {leaveBalances.map((bal) => {
               const lt = db.getLeaveTypes().find((t) => t.id === bal.leaveTypeId);
-              const percent = Math.round((bal.closingBalance / bal.accrued) * 100);
+              const percent = bal.accrued > 0 ? Math.round((bal.closingBalance / bal.accrued) * 100) : 0;
               return (
                 <div key={bal.id} className="p-4 rounded-xl bg-[#faf9f5] border border-[#ece7dc] space-y-2">
                   <div className="flex justify-between items-center text-xs">

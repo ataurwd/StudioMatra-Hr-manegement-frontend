@@ -32,7 +32,7 @@ const WEEK_DAYS = [
   { id: 3, name: 'Wed', full: 'Wednesday', isWeekend: false },
   { id: 4, name: 'Thu', full: 'Thursday', isWeekend: false },
   { id: 5, name: 'Fri', full: 'Friday', isWeekend: true },
-  { id: 6, name: 'Sat', full: 'Saturday', isWeekend: true },
+  { id: 6, name: 'Sat', full: 'Saturday', isWeekend: false },
 ];
 
 function calculateShiftHours(
@@ -177,7 +177,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser }) => {
       endTime: '18:00',
       breakMinutes: 60,
       graceMinutes: 10,
-      weeklyWorkDays: [0, 1, 2, 3, 4],
+      weeklyWorkDays: [0, 1, 2, 3, 4, 6],
       isOvernight: false,
       status: 'active',
       timezone: 'Asia/Dhaka',

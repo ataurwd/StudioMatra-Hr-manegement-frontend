@@ -56,7 +56,7 @@ import {
   SEED_CORRECTION_REQUESTS,
 } from './seedData';
 
-const STORAGE_KEY_PREFIX = 'studio_matra_db_v4_';
+const STORAGE_KEY_PREFIX = 'studio_matra_db_v5_';
 
 interface DatabaseSchema {
   organization: Organization;

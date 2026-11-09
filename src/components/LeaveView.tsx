@@ -63,7 +63,20 @@ export const LeaveView: React.FC<LeaveViewProps> = ({ currentUser }) => {
   const departments = db.getDepartments();
   const designations = db.getDesignations();
   const allLeaveRequests = db.getLeaveRequests(isEmployeeRole && currentEmp ? currentEmp.id : undefined);
-  const userBalances = currentEmp ? db.getLeaveBalances(currentEmp.id) : [];
+  const userBalances = currentEmp
+    ? (db.getLeaveBalances(currentEmp.id).length > 0
+        ? db.getLeaveBalances(currentEmp.id)
+        : leaveTypes.map((lt) => ({
+            id: `lb-${currentEmp.id}-${lt.code.toLowerCase()}`,
+            employeeId: currentEmp.id,
+            leaveTypeId: lt.id,
+            year: 2026,
+            openingBalance: lt.annualQuota,
+            accrued: lt.annualQuota,
+            used: 0,
+            closingBalance: lt.annualQuota,
+          })))
+    : [];
 
   // Filtered requests
   const filteredRequests = allLeaveRequests.filter((r) => {
@@ -164,29 +177,85 @@ export const LeaveView: React.FC<LeaveViewProps> = ({ currentUser }) => {
         </div>
       )}
 
-      {/* Employee Personal Balances Preview (Always shown if viewing as regular employee) */}
-      {isEmployeeRole && currentEmp && (
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[#737d7a] mb-3">
-            Your Annual Quota Balances (2026)
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      {/* Employee Personal Balances Preview (Visible to any logged-in user with an employee profile) */}
+      {currentEmp && (
+        <div className="bg-gradient-to-r from-[#faf7f0] to-white p-5 rounded-2xl border border-[#e8e4da] shadow-xs">
+          <div className="flex items-center justify-between mb-3.5">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#8e6826] flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-[#CAA05C]" />
+                <span>Your Official Studio Leave Quotas & Remaining Balances (2026)</span>
+              </h3>
+              <p className="text-[11px] text-[#6d7773] mt-0.5">
+                Overview of your available leaves — tracking days remaining for Casual and Sick leave categories.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsApplyModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Apply for Leave</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {userBalances.map((bal) => {
               const lt = leaveTypes.find((t) => t.id === bal.leaveTypeId);
+              const remaining = bal.closingBalance;
+              const total = bal.accrued;
+              const used = bal.used;
+              const percentage = total > 0 ? Math.round((remaining / total) * 100) : 0;
+              const isLow = remaining <= 2;
+
               return (
-                <div key={bal.id} className="bg-white p-5 rounded-2xl border border-[#e8e4da] shadow-2xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#1c2120]">{lt?.name}</span>
-                    <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#f4f1ea] text-[#636e6a]">
-                      {lt?.code}
+                <div
+                  key={bal.id}
+                  className="bg-white p-5 rounded-2xl border border-[#ded8cb] hover:border-[#CAA05C]/50 transition-all shadow-xs flex flex-col justify-between"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-serif font-bold text-base text-[#1c2120]">{lt?.name || 'Leave'}</span>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#f4ece0] text-[#8e6826] border border-[#ebd8b7]">
+                          {lt?.code}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#717b77] mt-0.5">{lt?.description}</p>
+                    </div>
+
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        isLow ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      }`}
+                    >
+                      {remaining} Days Left
                     </span>
                   </div>
-                  <div className="mt-3 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-[#1b4332]">{bal.closingBalance}</span>
-                    <span className="text-xs text-[#717b77]">/ {bal.accrued} days left</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-[#78827f]">
-                    {bal.used} day(s) taken this year
+
+                  <div className="mt-4">
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl font-extrabold text-[#1b4332] font-mono">{remaining}</span>
+                        <span className="text-xs text-[#717b77] font-medium">/ {total} days total quota</span>
+                      </div>
+                      <span className="text-xs font-semibold text-[#8e6826] font-mono">{percentage}% available</span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2.5 rounded-full bg-[#f0ece1] overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          isLow ? 'bg-amber-500' : 'bg-[#CAA05C]'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, percentage))}%` }}
+                      />
+                    </div>
+
+                    <div className="mt-2.5 flex items-center justify-between text-[11px] text-[#717b77]">
+                      <span>Used: <strong className="text-[#1c2120]">{used}</strong> day(s) taken</span>
+                      <span>Remaining: <strong className="text-[#1b4332] font-bold">{remaining}</strong> day(s)</span>
+                    </div>
                   </div>
                 </div>
               );

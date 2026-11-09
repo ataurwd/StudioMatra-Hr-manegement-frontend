@@ -168,8 +168,8 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
       const dayOfWeekIndex = dayDate.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
       const dayName = dayFormatter.format(dayDate); // 'Sun', 'Mon', etc.
 
-      // Standard Bangladesh Architecture Office Weekend at Studio Matra: Friday & Saturday
-      const isWeekend = dayOfWeekIndex === 5 || dayOfWeekIndex === 6;
+      // Studio Matra Schedule: 6 Working Days (Sat–Thu), ONLY Friday is the weekly day off
+      const isWeekend = dayOfWeekIndex === 5;
       const isToday = dateStr === todayDhaka;
       const isFuture = dateStr > todayDhaka;
 

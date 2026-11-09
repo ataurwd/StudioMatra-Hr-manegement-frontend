@@ -144,7 +144,7 @@ export const SEED_SHIFTS: ShiftDefinition[] = [
     timezone: 'Asia/Dhaka',
     breakMinutes: 60,
     graceMinutes: 10,
-    weeklyWorkDays: [0, 1, 2, 3, 4], // Sun, Mon, Tue, Wed, Thu
+    weeklyWorkDays: [0, 1, 2, 3, 4, 6], // Sun, Mon, Tue, Wed, Thu, Sat (6 days, Friday off)
     status: 'active',
   },
 ];
@@ -410,42 +410,38 @@ export const SEED_LEAVE_TYPES: LeaveType[] = [
   {
     id: 'lt-casual',
     organizationId: 'org-studio-matra',
-    name: 'Casual Leave (Unpaid)',
+    name: 'Casual Leave',
     code: 'CL',
-    isPaid: false,
-    annualQuota: 0,
-    description: 'Personal matters (Studio Policy: No paid leave)',
+    isPaid: true,
+    annualQuota: 10,
+    description: 'For urgent personal matters and family occasions',
     requiresDocument: false,
   },
   {
     id: 'lt-sick',
     organizationId: 'org-studio-matra',
-    name: 'Sick Leave (Unpaid)',
+    name: 'Sick Leave',
     code: 'SL',
-    isPaid: false,
-    annualQuota: 0,
-    description: 'Medical and sickness leave (Studio Policy: No paid leave)',
+    isPaid: true,
+    annualQuota: 14,
+    description: 'For medical emergencies and health recovery',
     requiresDocument: true,
-  },
-  {
-    id: 'lt-unpaid',
-    organizationId: 'org-studio-matra',
-    name: 'Leave Without Pay (LWP)',
-    code: 'LWP',
-    isPaid: false,
-    annualQuota: 0,
-    description: 'Unpaid Leave (LWP)',
-    requiresDocument: false,
   },
 ];
 
 export const SEED_LEAVE_BALANCES: LeaveBalance[] = [
-  { id: 'lb-1-cl', employeeId: 'emp-0001', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 0, accrued: 0, used: 0, closingBalance: 0 },
-  { id: 'lb-2-cl', employeeId: 'emp-0002', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 0, accrued: 0, used: 0, closingBalance: 0 },
-  { id: 'lb-3-cl', employeeId: 'emp-0003', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 0, accrued: 0, used: 0, closingBalance: 0 },
-  { id: 'lb-4-cl', employeeId: 'emp-0004', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 0, accrued: 0, used: 0, closingBalance: 0 },
-  { id: 'lb-5-cl', employeeId: 'emp-0005', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 0, accrued: 0, used: 0, closingBalance: 0 },
-  { id: 'lb-6-cl', employeeId: 'emp-0006', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 0, accrued: 0, used: 0, closingBalance: 0 },
+  { id: 'lb-1-cl', employeeId: 'emp-0001', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 10, accrued: 10, used: 0, closingBalance: 10 },
+  { id: 'lb-1-sl', employeeId: 'emp-0001', leaveTypeId: 'lt-sick', year: 2026, openingBalance: 14, accrued: 14, used: 0, closingBalance: 14 },
+  { id: 'lb-2-cl', employeeId: 'emp-0002', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 10, accrued: 10, used: 0, closingBalance: 10 },
+  { id: 'lb-2-sl', employeeId: 'emp-0002', leaveTypeId: 'lt-sick', year: 2026, openingBalance: 14, accrued: 14, used: 0, closingBalance: 14 },
+  { id: 'lb-3-cl', employeeId: 'emp-0003', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 10, accrued: 10, used: 0, closingBalance: 10 },
+  { id: 'lb-3-sl', employeeId: 'emp-0003', leaveTypeId: 'lt-sick', year: 2026, openingBalance: 14, accrued: 14, used: 0, closingBalance: 14 },
+  { id: 'lb-4-cl', employeeId: 'emp-0004', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 10, accrued: 10, used: 0, closingBalance: 10 },
+  { id: 'lb-4-sl', employeeId: 'emp-0004', leaveTypeId: 'lt-sick', year: 2026, openingBalance: 14, accrued: 14, used: 0, closingBalance: 14 },
+  { id: 'lb-5-cl', employeeId: 'emp-0005', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 10, accrued: 10, used: 2, closingBalance: 8 },
+  { id: 'lb-5-sl', employeeId: 'emp-0005', leaveTypeId: 'lt-sick', year: 2026, openingBalance: 14, accrued: 14, used: 1, closingBalance: 13 },
+  { id: 'lb-6-cl', employeeId: 'emp-0006', leaveTypeId: 'lt-casual', year: 2026, openingBalance: 10, accrued: 10, used: 3, closingBalance: 7 },
+  { id: 'lb-6-sl', employeeId: 'emp-0006', leaveTypeId: 'lt-sick', year: 2026, openingBalance: 14, accrued: 14, used: 2, closingBalance: 12 },
 ];
 
 export const SEED_LEAVE_REQUESTS: LeaveRequest[] = [];
