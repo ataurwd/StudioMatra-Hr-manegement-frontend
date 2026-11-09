@@ -1,21 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowRight,
-  Compass,
   Eye,
   EyeOff,
-  KeyRound,
   Lock,
   Mail,
   ShieldCheck,
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { apiGetUsers } from '../services/apiService';
 
 export const LoginPage: React.FC = () => {
-  const { isAuthenticated, login, users } = useAppContext();
+  const { isAuthenticated, login } = useAppContext();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -23,19 +20,6 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
-  const [liveUsers, setLiveUsers] = useState(users);
-
-  // Fetch live accounts from MySQL directly
-  useEffect(() => {
-    apiGetUsers()
-      .then((fetched) => {
-        if (fetched && fetched.length > 0) {
-          setLiveUsers(fetched);
-        }
-      })
-      .catch(() => {});
-  }, [users]);
 
   // If already authenticated, redirect to root dashboard
   if (isAuthenticated) {
@@ -55,12 +39,6 @@ export const LoginPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickFill = (userEmail: string) => {
-    setEmail(userEmail);
-    setPassword('matra1234');
-    setErrorMessage('');
   };
 
   return (
@@ -168,37 +146,6 @@ export const LoginPage: React.FC = () => {
               <span>Accounts are provisioned exclusively by Studio Matra HR.</span>
             </p>
           </div>
-        </div>
-
-        {/* Collapsible Evaluation Helper for Testing */}
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => setShowDemoAccounts(!showDemoAccounts)}
-            className="text-[11px] text-[#788882] hover:text-[#CAA05C] transition-colors underline cursor-pointer"
-          >
-            {showDemoAccounts ? 'Hide Quick Demo Logins' : 'View Demo Personnel Logins (Testing)'}
-          </button>
-
-          {showDemoAccounts && (
-            <div className="mt-3 p-3.5 rounded-2xl bg-[#1a211f] border border-[#2b3633] text-left text-[11px] space-y-2">
-              <p className="font-bold text-[#c8d4cf] pb-1 border-b border-[#2b3633]">
-                Click an account to auto-fill (Password for all: <code className="font-mono text-[#CAA05C]">matra1234</code>):
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {(liveUsers && liveUsers.length > 0 ? liveUsers : users).slice(0, 6).map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => handleQuickFill(u.email)}
-                    className="p-2 rounded-lg bg-[#212a27] hover:bg-[#283330] border border-[#2d3a36] text-left flex flex-col cursor-pointer transition-colors"
-                  >
-                    <span className="font-semibold text-white truncate">{u.fullName}</span>
-                    <span className="text-[10px] text-[#8ea099] capitalize">{u.role.replace('_', ' ')}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer info */}
