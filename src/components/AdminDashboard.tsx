@@ -178,7 +178,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onN
         <AttendanceCalendarView
           currentUser={currentUser}
           allowEmployeeSwitch={true}
-          onRequestCorrection={() => goTo('attendance')}
         />
       ) : dashboardView === 'my_attendance' ? (
         /* My Personal Attendance & Kiosk PIN Tab */
@@ -221,7 +220,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onN
             <AttendanceCalendarView
               employeeId={currentEmp.id}
               currentUser={currentUser}
-              onRequestCorrection={() => goTo('attendance')}
             />
           )}
         </div>

@@ -30,6 +30,12 @@ export interface AppContextType {
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Helper: Sanitize user before saving to localStorage (prevent storing raw passwords)
+function sanitizeUserForStorage(user: User): User {
+  const { password, ...safeUser } = user;
+  return safeUser as User;
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<User[]>(() => db.getUsers());
 
@@ -76,7 +82,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (prev?.id) {
           const freshUser = db.getUserById(prev.id);
           if (freshUser && freshUser.accountStatus === 'active') {
-            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(freshUser));
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sanitizeUserForStorage(freshUser)));
             return freshUser;
           }
         }
@@ -103,7 +109,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = (email: string, pass: string): User => {
     const authenticated = db.authenticateUser(email, pass);
     setCurrentUser(authenticated);
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authenticated));
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sanitizeUserForStorage(authenticated)));
     setNotifications(db.getNotifications(authenticated.id));
     // Trigger background API sync
     apiLogin(email, pass).then((res) => {
@@ -126,7 +132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fresh = db.getUserById(currentUser.id);
     if (fresh) {
       setCurrentUser(fresh);
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(fresh));
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sanitizeUserForStorage(fresh)));
     }
     // Update password in MySQL via REST API
     apiChangePassword(currentUser.id, currentPass, newPass).catch(() => {});

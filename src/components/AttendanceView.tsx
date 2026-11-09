@@ -20,12 +20,10 @@ import {
   X,
 } from 'lucide-react';
 import { db } from '../db/database';
-import { apiReviewCorrection } from '../services/apiService';
-import { AttendanceCorrectionRequest, AttendanceSession, Employee, RoleName, User } from '../types';
+import { AttendanceSession, Employee, RoleName, User } from '../types';
 import { formatMinutes } from '../utils/attendanceCalculator';
 import { canManageAttendance, hasPermission } from '../utils/permissions';
 import { AttendanceCalendarView } from './AttendanceCalendarView';
-import { AttendanceCorrectionModal } from './AttendanceCorrectionModal';
 
 interface AttendanceViewProps {
   currentUser: User;
@@ -48,17 +46,17 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [searchParams] = useSearchParams();
   const urlTab = searchParams.get('tab');
   const initialTab =
-    urlTab && ['calendar', 'register', 'missing', 'corrections', 'network'].includes(urlTab)
-      ? (urlTab as 'calendar' | 'register' | 'missing' | 'corrections' | 'network')
+    urlTab && ['calendar', 'register', 'missing', 'network'].includes(urlTab)
+      ? (urlTab as 'calendar' | 'register' | 'missing' | 'network')
       : isEmployeeRole
       ? 'calendar'
       : 'register';
 
-  const [activeTab, setActiveTab] = useState<'calendar' | 'register' | 'missing' | 'corrections' | 'network'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'calendar' | 'register' | 'missing' | 'network'>(initialTab);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['calendar', 'register', 'missing', 'corrections', 'network'].includes(tabParam)) {
+    if (tabParam && ['calendar', 'register', 'missing', 'network'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [searchParams]);
@@ -69,15 +67,6 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-
-  // Correction Request Modals
-  const [isCustomCorrectionOpen, setIsCustomCorrectionOpen] = useState(false);
-  const [modalCorrectionDate, setModalCorrectionDate] = useState<string | undefined>(undefined);
-  const [modalCorrectionSession, setModalCorrectionSession] = useState<AttendanceSession | null>(null);
-
-  // Review Modal
-  const [reviewRequest, setReviewRequest] = useState<AttendanceCorrectionRequest | null>(null);
-  const [reviewComment, setReviewComment] = useState('');
 
   const employees = db.getEmployees();
   const departments = db.getDepartments();
@@ -112,25 +101,6 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
     return true;
   });
 
-  const handleExecuteReview = (action: 'manager_reviewed' | 'apply' | 'reject') => {
-    if (!reviewRequest) return;
-    try {
-      const reviewer = { userId: currentUser.id, name: currentUser.fullName, role: currentUser.role };
-      db.reviewCorrectionRequest({
-        requestId: reviewRequest.id,
-        action,
-        comment: reviewComment,
-        reviewer,
-      });
-      // Synchronize review directly with MySQL backend
-      apiReviewCorrection(reviewRequest.id, action, reviewComment, reviewer).catch(() => {});
-      setReviewRequest(null);
-      setReviewComment('');
-    } catch (err: any) {
-      alert(err.message || 'Review failed');
-    }
-  };
-
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header Bar */}
@@ -157,19 +127,6 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
               <CalendarCheck className="w-4 h-4 text-[#CAA05C]" />
               <span>Staff Monthly Console</span>
             </Link>
-          )}
-          {currentEmp && (
-            <button
-              onClick={() => {
-                setModalCorrectionDate(undefined);
-                setModalCorrectionSession(null);
-                setIsCustomCorrectionOpen(true);
-              }}
-              className="px-3.5 py-2 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-            >
-              <Clock className="w-4 h-4" />
-              <span>Request Correction</span>
-            </button>
           )}
           <button
             onClick={onOpenKiosk}
@@ -227,23 +184,6 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
           {missingPunches.length > 0 && (
             <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px]">
               {missingPunches.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('corrections')}
-          className={`px-4 py-2.5 rounded-t-xl transition-colors cursor-pointer flex items-center gap-2 ${
-            activeTab === 'corrections'
-              ? 'bg-white text-[#CAA05C] border-t-2 border-t-[#CAA05C] border-x border-[#e8e4da] font-bold'
-              : 'text-[#6e7874] hover:text-[#1c2120]'
-          }`}
-        >
-          <History className="w-4 h-4" />
-          <span>Correction Requests</span>
-          {allCorrectionRequests.filter((c) => c.status === 'submitted').length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-[#CAA05C] text-[#171c1b] font-bold text-[10px]">
-              {allCorrectionRequests.filter((c) => c.status === 'submitted').length}
             </span>
           )}
         </button>

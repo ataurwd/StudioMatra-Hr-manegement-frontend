@@ -21,7 +21,6 @@ import { formatMinutes } from '../utils/attendanceCalculator';
 import { formatBDT } from '../utils/money';
 import { KioskPinCard } from './common/KioskPinCard';
 import { AttendanceCalendarView } from './AttendanceCalendarView';
-import { AttendanceCorrectionModal } from './AttendanceCorrectionModal';
 
 interface EmployeeDashboardProps {
   currentUser: User;
@@ -51,9 +50,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
   const [elapsedString, setElapsedString] = useState('0h 0m');
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
-  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
-  const [correctionModalDate, setCorrectionModalDate] = useState<string | undefined>(undefined);
-  const [correctionModalSession, setCorrectionModalSession] = useState<AttendanceSession | null>(null);
 
   const refreshSessions = () => {
     if (employee) {
@@ -226,17 +222,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
             <Calendar className="w-4 h-4 text-[#CAA05C]" />
             <span>Attendance Log</span>
           </button>
-          <button
-            onClick={() => {
-              setCorrectionModalDate(undefined);
-              setCorrectionModalSession(null);
-              setIsCorrectionModalOpen(true);
-            }}
-            className="px-3.5 py-2 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-          >
-            <Clock className="w-4 h-4" />
-            <span>Request Correction</span>
-          </button>
         </div>
       </div>
 
@@ -362,17 +347,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
                 <span>OFFICE CHECK OUT</span>
               </button>
             )}
-
-            <button
-              onClick={() => {
-                setCorrectionModalDate(undefined);
-                setCorrectionModalSession(null);
-                setIsCorrectionModalOpen(true);
-              }}
-              className="w-full sm:w-auto py-3.5 px-5 rounded-xl bg-[#f4f1ea] hover:bg-[#eae6dc] text-[#3b4340] font-semibold text-xs transition-colors cursor-pointer"
-            >
-              Request Correction
-            </button>
           </div>
 
           <div className="mt-4 flex items-center gap-2 text-[11px] text-[#76807c]">
@@ -391,11 +365,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
       <AttendanceCalendarView
         employeeId={employee.id}
         currentUser={currentUser}
-        onRequestCorrection={(dateStr, session) => {
-          setCorrectionModalDate(dateStr);
-          setCorrectionModalSession(session || null);
-          setIsCorrectionModalOpen(true);
-        }}
       />
 
       {/* Annual Leave Balances & Quota Card */}
@@ -439,19 +408,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
           })}
         </div>
       </div>
-
-      {/* Attendance Correction Request Modal */}
-      {isCorrectionModalOpen && (
-        <AttendanceCorrectionModal
-          isOpen={isCorrectionModalOpen}
-          onClose={() => setIsCorrectionModalOpen(false)}
-          currentUser={currentUser}
-          employeeId={employee.id}
-          initialDate={correctionModalDate}
-          initialSession={correctionModalSession}
-          onSuccess={refreshSessions}
-        />
-      )}
     </div>
   );
 };

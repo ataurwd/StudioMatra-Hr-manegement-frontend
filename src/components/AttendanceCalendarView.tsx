@@ -1082,21 +1082,6 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                 </button>
               )}
 
-              {onRequestCorrection && !canManage && !selectedDayRecord.isFuture && !selectedDayRecord.isWeekend && (
-                <button
-                  onClick={() => {
-                    const sess = selectedDayRecord.session;
-                    const dStr = selectedDayRecord.dateStr;
-                    setSelectedDayRecord(null);
-                    onRequestCorrection(dStr, sess);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-[#f4f1ea] hover:bg-[#eae6dc] text-[#1c2120] text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Clock className="w-3.5 h-3.5 text-[#CAA05C]" />
-                  <span>Request Attendance Correction</span>
-                </button>
-              )}
-
               <button
                 onClick={() => setSelectedDayRecord(null)}
                 className="px-5 py-2 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] text-xs font-bold cursor-pointer"
