@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { db } from '../db/database';
 import { generatePayslipPDF } from '../services/pdfGenerator';
-import { syncWithBackend } from '../services/apiService';
+import { syncWithBackend, apiCheckIn, apiCheckOut } from '../services/apiService';
 import { AttendanceSession, Employee, LeaveBalance, PayrollItem, User } from '../types';
 import { formatMinutes } from '../utils/attendanceCalculator';
 import { formatBDT } from '../utils/money';
@@ -155,7 +155,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
     totalMinutesWorked += s.workedMinutes;
   }
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     setActionError('');
     setActionSuccess('');
 
@@ -174,6 +174,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
         clientIp: '192.168.1.105',
         actorUserId: currentUser.id,
       });
+      // Synchronize directly with MySQL backend
+      apiCheckIn(employee.id, 'office_network').then(() => syncWithBackend()).catch(() => {});
       setActionSuccess(
         `Checked in successfully at ${new Date(session.checkInAt).toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' })}. Status: ${session.computedStatus.toUpperCase()}.`
       );
@@ -183,7 +185,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
     }
   };
 
-  const handleCheckOut = () => {
+  const handleCheckOut = async () => {
     setActionError('');
     setActionSuccess('');
 
@@ -194,6 +196,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
         clientIp: '192.168.1.105',
         actorUserId: currentUser.id,
       });
+      // Synchronize directly with MySQL backend
+      apiCheckOut(employee.id, 'office_network').then(() => syncWithBackend()).catch(() => {});
       setActionSuccess(
         `Checked out successfully! Total worked: ${formatMinutes(session.workedMinutes)} (${session.breakMinutes}m lunch break deducted). Status: ${session.computedStatus.toUpperCase()}.`
       );

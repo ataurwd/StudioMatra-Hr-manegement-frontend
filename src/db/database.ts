@@ -596,7 +596,10 @@ class StudioMatraDatabase {
   }
 
   public getActiveSession(employeeId: string): AttendanceSession | undefined {
-    return this.state.attendanceSessions.find((s) => s.employeeId === employeeId && !s.checkOutAt);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    return this.state.attendanceSessions.find(
+      (s) => s.employeeId === employeeId && s.attendanceDate === today && !s.checkOutAt
+    );
   }
 
   public getTodaySession(employeeId: string): AttendanceSession | undefined {
@@ -645,10 +648,15 @@ class StudioMatraDatabase {
     const employee = this.getEmployeeById(employeeId);
     if (!employee) throw new Error('Employee record not found');
 
-    // Rule: Check for active open session
+    // Rule: Check for active open session for today
     const existingActive = this.getActiveSession(employeeId);
     if (existingActive) {
-      throw new Error(`Employee already has an active check-in session for ${existingActive.attendanceDate}. Please check out first.`);
+      throw new Error(`Employee already has an active check-in session for today (${existingActive.attendanceDate}). Please check out first.`);
+    }
+
+    const todaySession = this.getTodaySession(employeeId);
+    if (todaySession && todaySession.checkOutAt) {
+      throw new Error(`Today's shift attendance for ${todaySession.attendanceDate} is already marked and closed.`);
     }
 
     const shift = this.state.shifts.find((s) => s.id === employee.shiftId) || this.state.shifts[0];

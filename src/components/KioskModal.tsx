@@ -15,6 +15,7 @@ import { db } from '../db/database';
 import { AttendanceSession, Employee } from '../types';
 import { formatMinutes } from '../utils/attendanceCalculator';
 import { useAppContext } from '../context/AppContext';
+import { apiCheckIn, apiCheckOut, syncWithBackend } from '../services/apiService';
 
 interface KioskModalProps {
   isOpen: boolean;
@@ -233,6 +234,8 @@ export const KioskModal: React.FC<KioskModalProps> = ({ isOpen, onClose }) => {
         clientIp: '192.168.1.105',
         actorUserId: selectedEmployee.userId,
       });
+      // Synchronize directly with MySQL backend
+      apiCheckIn(selectedEmployee.id, 'kiosk').then(() => syncWithBackend()).catch(() => {});
 
       setSuccessResult({
         action: 'check_in',
@@ -262,6 +265,8 @@ export const KioskModal: React.FC<KioskModalProps> = ({ isOpen, onClose }) => {
         clientIp: '192.168.1.105',
         actorUserId: selectedEmployee.userId,
       });
+      // Synchronize directly with MySQL backend
+      apiCheckOut(selectedEmployee.id, 'kiosk').then(() => syncWithBackend()).catch(() => {});
 
       setSuccessResult({
         action: 'check_out',
