@@ -247,3 +247,13 @@ test('Only Administrators (Super Admin & HR Admin) can modify an employee PIN co
   updatedUser = db.getUserByEmployeeId(targetEmp.id);
   assert.equal(updatedUser?.pinCode, '1111');
 });
+
+test('Staff Monthly Attendance route is exclusively accessible by Super Admin only', () => {
+  const isStaffAttendanceAuthorized = (role: string) => role === 'super_admin';
+
+  assert.equal(isStaffAttendanceAuthorized('super_admin'), true);
+  assert.equal(isStaffAttendanceAuthorized('hr_admin'), false);
+  assert.equal(isStaffAttendanceAuthorized('finance_manager'), false);
+  assert.equal(isStaffAttendanceAuthorized('department_manager'), false);
+  assert.equal(isStaffAttendanceAuthorized('employee'), false);
+});

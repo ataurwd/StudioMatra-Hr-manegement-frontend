@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   AlertTriangle,
   ArrowRight,
   Calendar,
+  CalendarCheck,
   CalendarDays,
   CheckCircle2,
   Clock,
@@ -185,6 +187,15 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {currentUser.role === 'super_admin' && (
+            <Link
+              to="/staff-attendance"
+              className="px-3.5 py-2 rounded-xl bg-[#fcf8f0] hover:bg-[#f7efe0] text-[#8e6826] text-xs font-bold flex items-center gap-1.5 transition-colors border border-[#ebd8b7] shadow-2xs"
+            >
+              <CalendarCheck className="w-4 h-4 text-[#CAA05C]" />
+              <span>Staff Monthly Console</span>
+            </Link>
+          )}
           <button
             onClick={onOpenKiosk}
             className="px-4 py-2 rounded-xl bg-[#1c2120] hover:bg-[#28322f] text-white text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-xs border border-[#353d3a]"

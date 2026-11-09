@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  CalendarCheck,
   CalendarDays,
   Clock,
   Compass,
@@ -39,6 +40,13 @@ export const Sidebar: React.FC = () => {
       label: 'Office Attendance',
       icon: Clock,
       show: true,
+    },
+    {
+      to: '/staff-attendance',
+      label: 'Staff Monthly Attendance',
+      icon: CalendarCheck,
+      show: currentRole === 'super_admin',
+      badge: 'Super Admin',
     },
     {
       to: '/leave',

@@ -9,6 +9,7 @@ import { hasPermission } from '../utils/permissions';
 const LoginPage = lazy(() => import('../pages/LoginPage'));
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
 const AttendancePage = lazy(() => import('../pages/AttendancePage'));
+const StaffAttendancePage = lazy(() => import('../pages/StaffAttendancePage'));
 const LeavePage = lazy(() => import('../pages/LeavePage'));
 const PayrollPage = lazy(() => import('../pages/PayrollPage'));
 const EmployeesPage = lazy(() => import('../pages/EmployeesPage'));
@@ -37,6 +38,20 @@ export const AppRoutes: React.FC = () => {
 
         {/* Attendance Register & Kiosk Logs */}
         <Route path="attendance" element={<AttendancePage />} />
+
+        {/* Staff Monthly Attendance & Management (Super Admin Exclusive) */}
+        <Route
+          path="staff-attendance"
+          element={
+            <ProtectedRoute
+              check={(role) => role === 'super_admin'}
+              message="Staff Monthly Attendance & Management console is exclusively restricted to Studio Super Admin."
+            >
+              <StaffAttendancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="attendance/management" element={<Navigate to="/staff-attendance" replace />} />
 
         {/* Leave Requests & Balances */}
         <Route path="leave" element={<LeavePage />} />
