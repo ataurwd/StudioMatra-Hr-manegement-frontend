@@ -13,6 +13,10 @@ import {
 } from '../utils/payrollCalculator';
 import { PayrollPolicy, SalaryContract } from '../types';
 import { db } from '../db/database';
+import { TEST_STATE } from './testFixtures';
+
+// Initialize in-memory test fixtures for headless test runner
+db.syncFromRemote(TEST_STATE);
 
 const defaultPolicy: PayrollPolicy = {
   id: 'policy-1',

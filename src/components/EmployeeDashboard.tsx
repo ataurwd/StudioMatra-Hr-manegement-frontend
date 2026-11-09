@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { db } from '../db/database';
 import { generatePayslipPDF } from '../services/pdfGenerator';
+import { syncWithBackend } from '../services/apiService';
 import { AttendanceSession, Employee, LeaveBalance, PayrollItem, User } from '../types';
 import { formatMinutes } from '../utils/attendanceCalculator';
 import { formatBDT } from '../utils/money';
@@ -66,6 +67,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
   };
 
   useEffect(() => {
+    syncWithBackend().catch(() => {});
     refreshSessions();
     const unsub = db.subscribe(refreshSessions);
     return unsub;

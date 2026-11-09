@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { db } from '../db/database';
 import { NotificationItem, User } from '../types';
-import { schedulePushToBackend, syncWithBackend } from '../services/apiService';
+import { syncWithBackend, apiLogin, apiChangePassword } from '../services/apiService';
 
 const AUTH_STORAGE_KEY = 'studio_matra_auth_user_v4';
 
-interface AppContextType {
+export interface AppContextType {
   currentUser: User | null;
   users: User[];
   isAuthenticated: boolean;
@@ -28,7 +28,7 @@ interface AppContextType {
   refreshNotifications: () => void;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<User[]>(() => db.getUsers());
@@ -72,15 +72,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const handleDbUpdate = () => {
       setUsers(db.getUsers());
-      if (currentUser?.id) {
-        const freshUser = db.getUserById(currentUser.id);
-        if (freshUser) {
-          setCurrentUser(freshUser);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(freshUser));
+      setCurrentUser((prev) => {
+        if (prev?.id) {
+          const freshUser = db.getUserById(prev.id);
+          if (freshUser && freshUser.accountStatus === 'active') {
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(freshUser));
+            return freshUser;
+          }
         }
-      }
+        try {
+          const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            const fresh = db.getUserById(parsed.id);
+            if (fresh && fresh.accountStatus === 'active') {
+              return fresh;
+            }
+          }
+        } catch {}
+        return prev;
+      });
       refreshNotifications();
-      schedulePushToBackend();
     };
 
     handleDbUpdate();
@@ -93,6 +105,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(authenticated);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authenticated));
     setNotifications(db.getNotifications(authenticated.id));
+    // Trigger background API sync
+    apiLogin(email, pass).then((res) => {
+      if (res && res.user) {
+        syncWithBackend().catch(() => {});
+      }
+    }).catch(() => {});
     return authenticated;
   };
 
@@ -110,6 +128,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentUser(fresh);
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(fresh));
     }
+    // Update password in MySQL via REST API
+    apiChangePassword(currentUser.id, currentPass, newPass).catch(() => {});
     return result;
   };
 
@@ -145,10 +165,4 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
-export function useAppContext(): AppContextType {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useAppContext must be used within an AppProvider');
-  }
-  return context;
-}
+export { useAppContext } from './useAppContext';

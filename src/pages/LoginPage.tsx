@@ -58,8 +58,18 @@ export const LoginPage: React.FC = () => {
       <div className="max-w-md w-full relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 mx-auto rounded-3xl bg-white p-2.5 flex items-center justify-center border-2 border-[#CAA05C]/50 shadow-2xl mb-4">
-            <img src="/logo.png" alt="Studio Matra Logo" className="w-full h-full object-contain" />
+          <div
+            className="w-20 h-20 mx-auto rounded-3xl bg-white p-2.5 flex items-center justify-center border-2 border-[#CAA05C]/50 shadow-2xl mb-4 overflow-hidden"
+            style={{ width: 80, height: 80, minWidth: 80, minHeight: 80, maxWidth: 80, maxHeight: 80 }}
+          >
+            <img
+              src="/logo.png"
+              alt="Studio Matra Logo"
+              width={64}
+              height={64}
+              className="w-full h-full object-contain"
+              style={{ maxWidth: 64, maxHeight: 64, width: '100%', height: '100%' }}
+            />
           </div>
           <h1 className="text-2xl font-serif font-bold text-white tracking-wider">
             STUDIO MATRA

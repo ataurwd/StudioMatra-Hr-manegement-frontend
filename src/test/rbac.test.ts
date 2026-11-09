@@ -6,6 +6,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../db/database';
+import { TEST_STATE } from './testFixtures';
+
+// Initialize in-memory test fixtures for headless test runner
+db.syncFromRemote(TEST_STATE);
 import {
   canApproveLeave,
   canManageAttendance,

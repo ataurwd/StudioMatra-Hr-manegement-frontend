@@ -106,8 +106,18 @@ export const Sidebar: React.FC = () => {
             onClick={() => setIsMobileNavOpen(false)}
             className="flex items-center gap-3 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-white p-1.5 flex items-center justify-center border border-[#CAA05C]/40 shadow-xs group-hover:border-[#CAA05C] transition-colors shrink-0">
-              <img src="/logo.png" alt="Studio Matra Logo" className="w-full h-full object-contain" />
+            <div
+              className="w-10 h-10 rounded-xl bg-white p-1.5 flex items-center justify-center border border-[#CAA05C]/40 shadow-xs group-hover:border-[#CAA05C] transition-colors shrink-0 overflow-hidden"
+              style={{ width: 40, height: 40, minWidth: 40, minHeight: 40, maxWidth: 40, maxHeight: 40 }}
+            >
+              <img
+                src="/logo.png"
+                alt="Studio Matra Logo"
+                width={32}
+                height={32}
+                className="w-full h-full object-contain"
+                style={{ maxWidth: 32, maxHeight: 32, width: '100%', height: '100%' }}
+              />
             </div>
             <div>
               <div className="flex items-center gap-1.5">

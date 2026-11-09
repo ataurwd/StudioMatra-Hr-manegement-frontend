@@ -29,35 +29,15 @@ export async function checkBackendHealth(): Promise<HealthResponse | null> {
   }
 }
 
-let syncTimeout: any = null;
-
-export function schedulePushToBackend(): void {
-  if (syncTimeout) clearTimeout(syncTimeout);
-  syncTimeout = setTimeout(() => {
-    pushToBackend().catch(() => {});
-  }, 1000);
-}
-
-export async function pushToBackend(): Promise<boolean> {
-  try {
-    const state = db.exportState();
-    const res = await fetch(`${API_BASE}/sync/master`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
+/**
+ * Dynamically synchronizes client data directly from MySQL database through backend REST API.
+ */
 export async function syncWithBackend(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/sync/master`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${API_BASE}/sync/master`, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) return false;
     const remoteData = await res.json();
-    if (remoteData && remoteData.users && remoteData.employees) {
+    if (remoteData && (remoteData.users?.length > 0 || remoteData.employees?.length > 0)) {
       db.syncFromRemote(remoteData);
       return true;
     }
@@ -67,6 +47,7 @@ export async function syncWithBackend(): Promise<boolean> {
   }
 }
 
+// --- Auth & Profile ---
 export async function apiLogin(email: string, pass: string): Promise<{ user: User; token: string } | null> {
   try {
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -94,12 +75,13 @@ export async function apiChangePassword(userId: string, currentPassword: string,
   }
 }
 
-export async function apiKioskPunch(pin: string, mode?: 'check_in' | 'check_out', deviceId?: string): Promise<any> {
+// --- Attendance & Kiosk ---
+export async function apiCheckIn(employeeId: string, sourceType?: string): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE}/attendance/kiosk-punch`, {
+    const res = await fetch(`${API_BASE}/attendance/check-in`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin, mode, deviceId }),
+      body: JSON.stringify({ employeeId, sourceType: sourceType || 'office_network' }),
     });
     return await res.json();
   } catch {
@@ -107,12 +89,87 @@ export async function apiKioskPunch(pin: string, mode?: 'check_in' | 'check_out'
   }
 }
 
-export async function apiUpdateLeaveBalances(balances: LeaveBalance[]): Promise<boolean> {
+export async function apiCheckOut(employeeId: string, sourceType?: string): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE}/leave/balances`, {
+    const res = await fetch(`${API_BASE}/attendance/check-out`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId, sourceType: sourceType || 'office_network' }),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiKioskPunch(pin: string, mode?: 'check_in' | 'check_out', deviceId?: string, loggedInUserId?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/kiosk-punch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin, mode, deviceId, loggedInUserId }),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiAdminOverrideAttendance(data: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/admin-override`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiAdminDeleteAttendance(sessionId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// --- Employees Management ---
+export async function apiCreateEmployee(employee: any, pinCode?: string, password?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/employees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee, pinCode, password }),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiUpdateEmployee(employeeId: string, updates: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/employees/${employeeId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ balances }),
+      body: JSON.stringify(updates),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiDeleteEmployee(employeeId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/employees/${employeeId}`, {
+      method: 'DELETE',
     });
     return res.ok;
   } catch {
@@ -150,12 +207,13 @@ export async function apiUpdateEmployeePassword(employeeId: string, newPassword:
   }
 }
 
-export async function apiAdminOverrideAttendance(data: any): Promise<any> {
+// --- Leave Management ---
+export async function apiApplyLeave(request: any): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE}/attendance/admin-override`, {
+    const res = await fetch(`${API_BASE}/leave/requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ request }),
     });
     return await res.json();
   } catch {
@@ -163,14 +221,81 @@ export async function apiAdminOverrideAttendance(data: any): Promise<any> {
   }
 }
 
-export async function apiAdminDeleteAttendance(sessionId: string): Promise<boolean> {
+export async function apiReviewLeave(requestId: string, status: string, comment?: string, reviewerId?: string): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE}/attendance/sessions/${sessionId}`, {
-      method: 'DELETE',
+    const res = await fetch(`${API_BASE}/leave/requests/${requestId}/review`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, comment, reviewerId }),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiUpdateLeaveBalances(balances: LeaveBalance[]): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/leave/balances`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ balances }),
     });
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+// --- Payroll Management ---
+export async function apiCreatePayrollPeriod(month: number, year: number, name?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/periods`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month, year, name }),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiPublishPayslips(runId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/runs/${runId}/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function apiCalculatePayroll(periodId: string, calculatedBy?: string, notes?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ periodId, calculatedBy, notes }),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiUpdatePayrollRunStatus(runId: string, status: string, actorId?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/runs/${runId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, actorId }),
+    });
+    return await res.json();
+  } catch {
+    return null;
   }
 }
 
@@ -197,5 +322,29 @@ export async function apiRecordPayment(params: {
   }
 }
 
+// --- Settings & Organization ---
+export async function apiUpdateOrganization(updates: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/settings/organization`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
-
+export async function apiUpdatePayrollPolicy(updates: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/settings/payroll-policy`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}

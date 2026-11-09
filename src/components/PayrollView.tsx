@@ -21,7 +21,14 @@ import {
 } from 'lucide-react';
 import { db } from '../db/database';
 import { generatePayslipPDF } from '../services/pdfGenerator';
-import { apiRecordPayment } from '../services/apiService';
+import {
+  apiCalculatePayroll,
+  apiCreatePayrollPeriod,
+  apiPublishPayslips,
+  apiRecordPayment,
+  apiUpdatePayrollRunStatus,
+  syncWithBackend,
+} from '../services/apiService';
 import { PayrollItem, PayrollPeriod, PayrollRun, RoleName, SalaryAdvance, SalaryContract, User } from '../types';
 import { canManagePayroll, canViewSalary } from '../utils/permissions';
 import { formatBDT } from '../utils/money';
@@ -185,7 +192,7 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
   const activeRun = allRuns.find((r) => r.payrollPeriodId === selectedPeriod?.id);
   const runItems = activeRun ? db.getPayrollItems(activeRun.id) : [];
 
-  const handleCreateNewPeriod = () => {
+  const handleCreateNewPeriod = async () => {
     try {
       const p = db.createPayrollPeriod(newMonth, newYear, {
         userId: currentUser.id,
@@ -193,36 +200,42 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
       });
       setSelectedPeriodId(p.id);
       setIsNewPeriodModalOpen(false);
+      apiCreatePayrollPeriod(newMonth, newYear).catch(() => {});
     } catch (err: any) {
       alert(err.message || 'Error creating period');
     }
   };
 
-  const handleCalculateDraft = () => {
+  const handleCalculateDraft = async () => {
     if (!selectedPeriod) return;
     try {
       db.calculateDraftPayroll(selectedPeriod.id, {
         userId: currentUser.id,
         name: currentUser.fullName,
       });
+      const res = await apiCalculatePayroll(selectedPeriod.id, currentUser.fullName);
+      if (res && res.run) {
+        await syncWithBackend();
+      }
     } catch (err: any) {
       alert(err.message || 'Draft calculation error');
     }
   };
 
-  const handleReviewRun = () => {
+  const handleReviewRun = async () => {
     if (!activeRun) return;
     try {
       db.reviewPayrollRun(activeRun.id, {
         userId: currentUser.id,
         name: currentUser.fullName,
       });
+      apiUpdatePayrollRunStatus(activeRun.id, 'reviewed', currentUser.fullName).catch(() => {});
     } catch (err: any) {
       alert(err.message);
     }
   };
 
-  const handleApproveRun = () => {
+  const handleApproveRun = async () => {
     if (!activeRun) return;
     try {
       db.approvePayrollRun(
@@ -230,36 +243,40 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
         { userId: currentUser.id, name: currentUser.fullName },
         'Approved by authorized financial signatory.'
       );
+      apiUpdatePayrollRunStatus(activeRun.id, 'approved', currentUser.fullName).catch(() => {});
     } catch (err: any) {
       alert(err.message);
     }
   };
 
-  const handleFinalizeRun = () => {
+  const handleFinalizeRun = async () => {
     if (!activeRun) return;
     try {
       db.finalizePayrollRun(activeRun.id, {
         userId: currentUser.id,
         name: currentUser.fullName,
       });
+      apiUpdatePayrollRunStatus(activeRun.id, 'finalized', currentUser.fullName).catch(() => {});
     } catch (err: any) {
       alert(err.message);
     }
   };
 
-  const handlePublishPayslips = () => {
+  const handlePublishPayslips = async () => {
     if (!activeRun) return;
     try {
       db.publishPayslips(activeRun.id, {
         userId: currentUser.id,
         name: currentUser.fullName,
       });
+      await apiPublishPayslips(activeRun.id);
+      await syncWithBackend();
     } catch (err: any) {
       alert(err.message);
     }
   };
 
-  const handleSavePayment = () => {
+  const handleSavePayment = async () => {
     if (!paymentModalItem || !paymentRef.trim()) return;
     try {
       db.recordPayment({
@@ -269,13 +286,14 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
         paymentDate,
         actor: { userId: currentUser.id, name: currentUser.fullName },
       });
-      // Synchronize with backend API in background
-      apiRecordPayment({
+      // Synchronize with backend API in background & reload fresh master data
+      await apiRecordPayment({
         payrollItemId: paymentModalItem.id,
         paymentMethod,
         paymentReference: paymentRef,
         paymentDate,
-      }).catch(() => {});
+      });
+      await syncWithBackend();
       setPaymentModalItem(null);
       setPaymentRef('');
     } catch (err: any) {

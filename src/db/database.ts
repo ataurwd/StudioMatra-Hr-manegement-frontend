@@ -129,116 +129,28 @@ class StudioMatraDatabase {
   }
 
   private getInitialSeed(): DatabaseSchema {
-    // Generate an initial sample payroll period and draft run for Oct 2026
-    const samplePeriodId = 'period-2026-10';
-    const sampleRunId = 'run-2026-10-v1';
-
-    const samplePeriod: PayrollPeriod = {
-      id: samplePeriodId,
-      organizationId: SEED_ORGANIZATION.id,
-      month: 10,
-      year: 2026,
-      periodStart: '2026-10-01',
-      periodEnd: '2026-10-31',
-      status: 'finalized',
-    };
-
-    const sampleRun: PayrollRun = {
-      id: sampleRunId,
-      organizationId: SEED_ORGANIZATION.id,
-      payrollPeriodId: samplePeriodId,
-      month: 10,
-      year: 2026,
-      versionNumber: 1,
-      status: 'finalized',
-      totalEmployees: SEED_EMPLOYEES.length,
-      totalGross: 328000,
-      totalDeductions: 0,
-      totalNet: 328000,
-      calculatedAt: '2026-10-31T18:00:00Z',
-      calculatedBy: 'IAr. Mohit Md. Mofiz',
-      reviewedBy: 'IAr. Mohit Md. Mofiz',
-      reviewedAt: '2026-10-31T19:00:00Z',
-      approvedBy: 'IAr. Md. Ishtiaque Haque',
-      approvedAt: '2026-11-01T10:00:00Z',
-      finalizedBy: 'IAr. Mohit Md. Mofiz',
-      finalizedAt: '2026-11-01T11:00:00Z',
-    };
-
-    // Generate published payroll items for seed employees so employee self-service can download
-    const sampleItems: PayrollItem[] = SEED_EMPLOYEES.map((emp) => {
-      const contract = SEED_SALARY_CONTRACTS.find((c) => c.employeeId === emp.id)!;
-      const dept = SEED_DEPARTMENTS.find((d) => d.id === emp.departmentId)!;
-      const des = SEED_DESIGNATIONS.find((d) => d.id === emp.designationId)!;
-      const advance = SEED_SALARY_ADVANCES.find((a) => a.employeeId === emp.id);
-
-      const aggregate: EmployeeAttendanceAggregate = {
-        employeeId: emp.id,
-        totalPresent: 22,
-        totalLate: 1,
-        totalHalfDay: 0,
-        totalPaidLeave: emp.id === 'emp-0005' ? 1 : 0,
-        totalUnpaidLeave: 0,
-        totalAbsent: 0,
-        totalOvertimeHours: emp.id === 'emp-0005' ? 4 : 0,
-        totalWorkedHours: 180,
-      };
-
-      const result = calculateEmployeePayroll({
-        periodMonth: 10,
-        periodYear: 2026,
-        periodStart: '2026-10-01',
-        periodEnd: '2026-10-31',
-        daysInMonth: 31,
-        scheduledWorkingDays: 22,
-        employee: {
-          id: emp.id,
-          employeeCode: emp.employeeCode,
-          fullName: emp.fullName,
-          departmentName: dept.name,
-          designationTitle: des.title,
-          joiningDate: emp.joiningDate,
-        },
-        salaryContract: contract,
-        attendance: aggregate,
-        policy: SEED_PAYROLL_POLICY,
-        activeAdvance: advance,
-      });
-
-      return {
-        ...result.payrollItem,
-        id: `item-${sampleRunId}-${emp.id}`,
-        payrollRunId: sampleRunId,
-        paymentStatus: 'paid',
-        paymentDate: '2026-11-02',
-        paymentMethod: 'bank_transfer',
-        paymentReference: `EBL-TRX-${Math.floor(100000 + Math.random() * 900000)}`,
-        publishedAt: '2026-11-01T12:00:00Z',
-      };
-    });
-
     return {
       organization: SEED_ORGANIZATION,
-      users: SEED_USERS,
+      users: [],
       departments: SEED_DEPARTMENTS,
       designations: SEED_DESIGNATIONS,
-      employees: SEED_EMPLOYEES,
+      employees: [],
       shifts: SEED_SHIFTS,
-      attendanceSessions: SEED_ATTENDANCE_SESSIONS,
-      punchEvents: SEED_PUNCH_EVENTS,
-      correctionRequests: SEED_CORRECTION_REQUESTS,
+      attendanceSessions: [],
+      punchEvents: [],
+      correctionRequests: [],
       leaveTypes: SEED_LEAVE_TYPES,
-      leaveBalances: SEED_LEAVE_BALANCES,
-      leaveRequests: SEED_LEAVE_REQUESTS,
-      salaryContracts: SEED_SALARY_CONTRACTS,
-      salaryAdvances: SEED_SALARY_ADVANCES,
-      payrollPeriods: [samplePeriod],
-      payrollRuns: [sampleRun],
-      payrollItems: sampleItems,
+      leaveBalances: [],
+      leaveRequests: [],
+      salaryContracts: [],
+      salaryAdvances: [],
+      payrollPeriods: [],
+      payrollRuns: [],
+      payrollItems: [],
       payrollPolicy: SEED_PAYROLL_POLICY,
       settings: SEED_SETTINGS,
-      notifications: SEED_NOTIFICATIONS,
-      auditLogs: SEED_AUDIT_LOGS,
+      notifications: [],
+      auditLogs: [],
     };
   }
 

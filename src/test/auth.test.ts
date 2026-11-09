@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../db/database';
+import { TEST_STATE } from './testFixtures';
+
+// Initialize in-memory test fixtures for headless test runner
+db.syncFromRemote(TEST_STATE);
 
 test('Seed user Ishtiaque (Super Admin) authenticates with default password matra1234', () => {
   const user = db.authenticateUser('ishtiaque@studiomatra.com.bd', 'matra1234');
