@@ -94,65 +94,105 @@ class StudioMatraDatabase {
   private loadState(): DatabaseSchema {
     try {
       if (typeof window === 'undefined') {
-        return this.getInitialSeed();
+        return this.getEmptyState();
       }
 
       const stored = localStorage.getItem(STORAGE_KEY_PREFIX + 'master');
       if (stored) {
         const parsed: DatabaseSchema = JSON.parse(stored);
-        // Ensure current 6 studio employees and valid users are present
-        if (
-          parsed.employees &&
-          parsed.employees.length > 0 &&
-          parsed.users &&
-          parsed.users.length > 0 &&
-          parsed.employees.some((e) => e.fullName.includes('Ishtiaque'))
-        ) {
-          if (parsed.users) {
-            for (const u of parsed.users) {
-              if (!u.password) {
-                u.password = 'matra1234';
-              }
-              if (u.id === 'user-0001' && u.email === 'ishtiaque@studiomatra.com.bd') {
-                u.email = 'ishtiaque790@gmail.com';
-              }
-            }
-          }
-          if (parsed.employees) {
-            for (const emp of parsed.employees) {
-              if (emp.id === 'emp-0001' && emp.email === 'ishtiaque@studiomatra.com.bd') {
-                emp.email = 'ishtiaque790@gmail.com';
-              }
-            }
-          }
-          if (parsed.payrollItems) {
-            for (const item of parsed.payrollItems) {
-              if (item.paymentStatus === 'paid' && !item.publishedAt) {
-                item.publishedAt = new Date().toISOString();
-              }
-            }
-          }
-          if (parsed.shifts) {
-            for (const s of parsed.shifts) {
-              if (s.id === 'shift-standard' && s.startTime === '09:00' && s.endTime === '18:00') {
-                s.startTime = '10:15';
-                s.endTime = '19:30';
-              }
-            }
-          }
-          return parsed;
-        }
+        return parsed;
       }
     } catch (e) {
-      console.warn('Failed to load database from localStorage, resetting to seed data', e);
+      console.warn('Failed to load database from localStorage', e);
     }
 
-    const seed = this.getInitialSeed();
-    this.persist(seed);
-    return seed;
+    return this.getEmptyState();
   }
 
-  private getInitialSeed(): DatabaseSchema {
+  public getEmptyState(): DatabaseSchema {
+    return {
+      organization: {
+        id: 'org-studio-matra',
+        name: 'STUDIO MATRA',
+        subtitle: 'Architecture & Interior Design',
+        country: 'Bangladesh',
+        timezone: 'Asia/Dhaka',
+        currency: 'BDT',
+        currencySymbol: '৳',
+        address: 'House 42, Road 11, Block D, Banani, Dhaka 1213',
+        phone: '+880 1711-000000',
+        email: 'info@studiomatra.com.bd',
+        logoUrl: '/logo.png',
+        taxRegistrationNumber: 'TRN-MATRA-2024-BD',
+        createdAt: '2024-01-01T00:00:00Z',
+      },
+      users: [],
+      departments: [],
+      designations: [],
+      employees: [],
+      shifts: [],
+      attendanceSessions: [],
+      punchEvents: [],
+      correctionRequests: [],
+      leaveTypes: [],
+      leaveBalances: [],
+      leaveRequests: [],
+      salaryContracts: [],
+      salaryAdvances: [],
+      payrollPeriods: [],
+      payrollRuns: [],
+      payrollItems: [],
+      payrollPolicy: {
+        id: 'pol-studio-standard',
+        organizationId: 'org-studio-matra',
+        version: 1,
+        divisorMethod: 'fixed_30_days',
+        overtimeMultiplier: 1.5,
+        latePenaltyEnabled: true,
+        latePenaltyThresholdDays: 3,
+        unpaidLeaveDeductionFormula: 'per_day_gross',
+        roundingRule: 'round_nearest',
+        effectiveFrom: '2024-01-01',
+      },
+      settings: {
+        organization: {
+          id: 'org-studio-matra',
+          name: 'STUDIO MATRA',
+          subtitle: 'Architecture & Interior Design',
+          country: 'Bangladesh',
+          timezone: 'Asia/Dhaka',
+          currency: 'BDT',
+          currencySymbol: '৳',
+          address: 'House 42, Road 11, Block D, Banani, Dhaka 1213',
+          phone: '+880 1711-000000',
+          email: 'info@studiomatra.com.bd',
+          logoUrl: '/logo.png',
+          taxRegistrationNumber: 'TRN-MATRA-2024-BD',
+          createdAt: '2024-01-01T00:00:00Z',
+        },
+        trustedOfficeNetworks: [
+          { id: 'net-1', name: 'Studio Matra Fiber Primary', cidr: '192.168.1.0/24', enabled: true },
+        ],
+        kioskDevices: [],
+        payrollPolicy: {
+          id: 'pol-studio-standard',
+          organizationId: 'org-studio-matra',
+          version: 1,
+          divisorMethod: 'fixed_30_days',
+          overtimeMultiplier: 1.5,
+          latePenaltyEnabled: true,
+          latePenaltyThresholdDays: 3,
+          unpaidLeaveDeductionFormula: 'per_day_gross',
+          roundingRule: 'round_nearest',
+          effectiveFrom: '2024-01-01',
+        },
+      },
+      notifications: [],
+      auditLogs: [],
+    };
+  }
+
+  public getInitialSeed(): DatabaseSchema {
     return {
       organization: SEED_ORGANIZATION,
       users: [...SEED_USERS],
@@ -209,6 +249,7 @@ class StudioMatraDatabase {
 
   public syncFromRemote(remoteState: Partial<DatabaseSchema>) {
     this.state = { ...this.state, ...remoteState };
+    this.persist(this.state);
     this.notify();
   }
 
@@ -255,22 +296,19 @@ class StudioMatraDatabase {
   // -------------------------------------------------------------
 
   public getUsers(): User[] {
-    if (!this.state.users || this.state.users.length === 0) {
-      this.state.users = [...SEED_USERS];
-      this.persist(this.state);
-    }
-    return this.state.users;
+    return this.state.users || [];
   }
 
   public getUserById(userId: string): User | undefined {
-    return this.state.users.find((u) => u.id === userId);
+    return (this.state.users || []).find((u) => u.id === userId);
   }
 
   public getUserByEmail(email: string): User | undefined {
-    return this.state.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    return (this.state.users || []).find((u) => u.email.toLowerCase() === email.toLowerCase());
   }
 
   public upsertUser(user: User): void {
+    if (!this.state.users) this.state.users = [];
     const idx = this.state.users.findIndex((u) => u.id === user.id);
     if (idx >= 0) {
       this.state.users[idx] = { ...this.state.users[idx], ...user };
@@ -285,20 +323,7 @@ class StudioMatraDatabase {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = pass.trim();
 
-    if (!this.state.users || this.state.users.length === 0) {
-      this.state.users = [...SEED_USERS];
-      this.persist(this.state);
-    }
-
-    let user = this.state.users.find((u) => u.email.toLowerCase() === cleanEmail);
-    // Flexible fallback: if user-0001 email was changed in MySQL or phpMyAdmin
-    if (!user && (cleanEmail === 'ishtiaque790@gmail.com' || cleanEmail === 'ishtiaque@studiomatra.com.bd')) {
-      user = this.state.users.find((u) => u.id === 'user-0001');
-      if (user) {
-        user.email = cleanEmail;
-        this.persist(this.state);
-      }
-    }
+    const user = (this.state.users || []).find((u) => u.email.toLowerCase() === cleanEmail);
 
     if (!user) {
       throw new Error('No account found with this email address.');
@@ -318,8 +343,8 @@ class StudioMatraDatabase {
       {
         targetType: 'user',
         targetId: user.id,
-        action: 'USER_LOGIN',
-        details: `${user.fullName} (${user.email}) logged in successfully`,
+        action: 'LOGIN',
+        details: `${user.fullName} logged into Studio Matra Portal`,
       }
     );
 
@@ -388,11 +413,7 @@ class StudioMatraDatabase {
   }
 
   public getEmployees(): Employee[] {
-    if (!this.state.employees || this.state.employees.length === 0) {
-      this.state.employees = [...SEED_EMPLOYEES];
-      this.persist(this.state);
-    }
-    return this.state.employees;
+    return this.state.employees || [];
   }
 
   public getEmployeeById(employeeId: string): Employee | undefined {

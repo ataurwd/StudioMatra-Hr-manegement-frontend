@@ -107,7 +107,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser?.id]);
 
   const login = async (email: string, pass: string): Promise<User> => {
-    // 1. Direct authentication with MySQL REST API (/api/auth/login)
+    // 100% Direct live authentication with MySQL REST API (/api/auth/login)
     const apiRes = await apiLogin(email, pass);
     if (apiRes.success && apiRes.user) {
       const liveUser = apiRes.user;
@@ -119,17 +119,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return liveUser;
     }
 
-    // If server actively returned an error (e.g. wrong password or suspended)
-    if (apiRes.error && !apiRes.error.includes('non-JSON') && !apiRes.error.includes('Network error')) {
-      throw new Error(apiRes.error);
-    }
-
-    // 2. Offline fallback if backend server is unreachable
-    const authenticated = db.authenticateUser(email, pass);
-    setCurrentUser(authenticated);
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sanitizeUserForStorage(authenticated)));
-    setNotifications(db.getNotifications(authenticated.id));
-    return authenticated;
+    // Strict Database Authentication: Throw real database response error, no fallback
+    throw new Error(apiRes.error || 'Invalid email or password');
   };
 
   const logout = () => {

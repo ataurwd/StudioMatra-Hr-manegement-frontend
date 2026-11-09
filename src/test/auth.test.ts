@@ -6,9 +6,9 @@ import { TEST_STATE } from './testFixtures';
 // Initialize in-memory test fixtures for headless test runner
 db.syncFromRemote(TEST_STATE);
 
-test('Seed user Ishtiaque (Super Admin) authenticates with default password matra1234', () => {
-  const user = db.authenticateUser('ishtiaque@studiomatra.com.bd', 'matra1234');
-  assert.equal(user.email, 'ishtiaque@studiomatra.com.bd');
+test('Super Admin user authenticates with default password matra1234', () => {
+  const user = db.authenticateUser('ishtiaque790@gmail.com', 'matra1234');
+  assert.equal(user.email, 'ishtiaque790@gmail.com');
   assert.equal(user.role, 'super_admin');
   assert.equal(user.fullName, 'IAr. Md. Ishtiaque Haque');
 });
@@ -16,7 +16,7 @@ test('Seed user Ishtiaque (Super Admin) authenticates with default password matr
 test('Authentication fails with incorrect password', () => {
   assert.throws(
     () => {
-      db.authenticateUser('ishtiaque@studiomatra.com.bd', 'wrongpassword');
+      db.authenticateUser('ishtiaque790@gmail.com', 'wrongpassword');
     },
     { message: /Incorrect password/ }
   );
@@ -129,18 +129,18 @@ test('createEmployee with custom password and role allows immediate login', () =
   db.deleteEmployee(newEmp.id, { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' });
 });
 
-test('Database self-heals and loads baseline Studio Matra users when state is empty (e.g. Vercel cold start)', () => {
+test('Database populates directly from remote database state without static seed data', () => {
   // Simulate an empty database state
   (db as any).state.users = [];
   assert.equal((db as any).state.users.length, 0);
 
-  // Calling getUsers() must self-heal and return the 6 baseline personnel
+  // Syncing from live database populates the personnel
+  db.syncFromRemote(TEST_STATE);
   const users = db.getUsers();
   assert.equal(users.length, 6);
-  assert.ok(users.some((u) => u.email === 'ishtiaque790@gmail.com' || u.email === 'ishtiaque@studiomatra.com.bd'));
+  assert.ok(users.some((u) => u.email === 'ishtiaque790@gmail.com'));
 
-  // authenticateUser must also succeed on empty state
-  (db as any).state.users = [];
+  // authenticateUser succeeds with database user
   const authed = db.authenticateUser('ishtiaque790@gmail.com', 'matra1234');
   assert.equal(authed.role, 'super_admin');
 });
