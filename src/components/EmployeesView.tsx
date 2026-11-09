@@ -28,6 +28,13 @@ import { db } from '../db/database';
 import { Department, Designation, Employee, EmploymentType, RoleName, SalaryContract, ShiftDefinition, User } from '../types';
 import { canViewSalary, hasPermission } from '../utils/permissions';
 import { formatBDT } from '../utils/money';
+import {
+  apiCreateEmployee,
+  apiUpdateEmployee,
+  apiDeleteEmployee,
+  apiUpdateEmployeePin,
+  apiUpdateEmployeePassword,
+} from '../services/apiService';
 
 interface EmployeesViewProps {
   currentUser: User;
@@ -152,6 +159,25 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
         status: 'active',
       });
 
+      // Direct MySQL Database Synchronization via Backend REST API
+      apiCreateEmployee(
+        {
+          userId: newUserId,
+          employeeCode: newEmp.employeeCode,
+          fullName: newEmp.fullName,
+          email: newEmp.email,
+          phone: newEmp.phone,
+          departmentId: newEmp.departmentId,
+          designationId: newEmp.designationId,
+          joiningDate: newEmp.joiningDate,
+          employmentStatus: 'active',
+          employmentType: addEmploymentType,
+          shiftId: 'shift-standard',
+        },
+        pinCode || undefined,
+        accountPassword.trim() || 'matra1234'
+      ).catch((err) => console.warn('[Direct DB Create Sync Failed]:', err));
+
       setIsAddModalOpen(false);
       setFullName('');
       setEmail('');
@@ -170,6 +196,10 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
         userId: currentUser.id,
         name: currentUser.fullName,
       });
+
+      // Direct MySQL Database Synchronization via Backend REST API
+      apiDeleteEmployee(emp.id).catch((err) => console.warn('[Direct DB Delete Sync Failed]:', err));
+
       setSuccessBanner(`Employee ${emp.fullName} (${emp.employeeCode}) was successfully deleted.`);
       setTimeout(() => setSuccessBanner(''), 4000);
       setEmployeeToDelete(null);
@@ -1055,6 +1085,29 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
           userId: currentUser.id,
           name: currentUser.fullName,
         });
+      }
+
+      // 5. DIRECT DATABASE SYNC VIA BACKEND REST API
+      const cleanEmail = email.trim().toLowerCase();
+      apiUpdateEmployee(employee.id, {
+        fullName: fullName.trim(),
+        email: cleanEmail,
+        phone,
+        departmentId,
+        designationId,
+        customDesignation: customDesignation.trim() || undefined,
+        employmentStatus,
+        employmentType,
+        shiftId,
+        password: resetPassword.trim() || undefined,
+        pinCode: pinCode || undefined,
+      }).catch((err) => console.warn('[API Update Employee Sync Error]:', err));
+
+      if (resetPassword.trim()) {
+        apiUpdateEmployeePassword(employee.id, resetPassword.trim()).catch(() => {});
+      }
+      if (pinCode) {
+        apiUpdateEmployeePin(employee.id, pinCode, currentUser.role).catch(() => {});
       }
 
       onSuccess(`Successfully updated profile${resetPassword.trim() ? ', login password' : ''} & details for ${fullName}.`);

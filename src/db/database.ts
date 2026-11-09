@@ -374,6 +374,7 @@ class StudioMatraDatabase {
     }
 
     user.password = newPass.trim();
+    this.persist(this.state);
 
     this.logAudit(actor, {
       targetType: 'user',
@@ -444,6 +445,7 @@ class StudioMatraDatabase {
     } else {
       user.pinCode = newPin;
     }
+    this.persist(this.state);
 
     this.logAudit(actor, {
       targetType: 'employee',
@@ -561,11 +563,23 @@ class StudioMatraDatabase {
     const index = this.state.employees.findIndex((e) => e.id === employeeId);
     if (index !== -1) {
       this.state.employees[index] = { ...this.state.employees[index], ...updates };
+      const emp = this.state.employees[index];
+
+      // CRITICAL: Synchronize user account in users array
+      const user = this.state.users.find(
+        (u) => u.employeeId === employeeId || u.id === emp.userId
+      );
+      if (user) {
+        if (updates.email) user.email = updates.email.trim().toLowerCase();
+        if (updates.fullName) user.fullName = updates.fullName.trim();
+      }
+
+      this.persist(this.state);
       this.logAudit(actor, {
         targetType: 'employee',
         targetId: employeeId,
         action: 'UPDATE_EMPLOYEE',
-        details: `Updated employee details for ${this.state.employees[index].fullName}`,
+        details: `Updated employee details for ${emp.fullName}`,
       });
       this.notify();
     }
