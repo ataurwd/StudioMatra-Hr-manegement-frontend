@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@source "./App.tsx";
+@source "./components";
+@source "./pages";
+@source "./routes";
+@source "../index.html";
+
 @theme {
   --color-primary: #CAA05C;
   --color-primary-50: #fcf9f2;
