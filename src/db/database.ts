@@ -1441,7 +1441,7 @@ class StudioMatraDatabase {
 
   public getEmployeePublishedPayslips(employeeId: string): PayrollItem[] {
     return this.state.payrollItems
-      .filter((i) => i.employeeId === employeeId && (Boolean(i.publishedAt) || i.paymentStatus === 'paid'))
+      .filter((i) => i.employeeId === employeeId && Boolean(i.publishedAt))
       .sort((a, b) => {
         // Priority 1: Paid items before unpaid items
         if (a.paymentStatus !== b.paymentStatus) {
@@ -1920,7 +1920,6 @@ class StudioMatraDatabase {
     item.paymentMethod = paymentMethod;
     item.paymentReference = paymentReference;
     item.paymentDate = paymentDate;
-    item.publishedAt = new Date().toISOString();
 
     const emp = this.getEmployeeById(item.employeeId);
     if (emp) {

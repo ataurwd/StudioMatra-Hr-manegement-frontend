@@ -337,7 +337,7 @@ test('Negative net pay protection clamps to 0 and logs exception', () => {
   assert.equal(exceptions.some(e => e.includes('Negative Net Pay Exception')), true);
 });
 
-test('Employee can see paid payslip on dashboard even if period is in CALCULATED or DRAFT status', () => {
+test('Employee CANNOT see draft or unreleased payslips even if paid; payslip is strictly visible only after Admin publishes', () => {
   const actor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' };
 
   // Create a period and calculate payroll
@@ -351,7 +351,7 @@ test('Employee can see paid payslip on dashboard even if period is in CALCULATED
   assert.ok(iqbalItem, 'Iqbal item must exist in draft calculation');
   assert.equal(iqbalItem.paymentStatus, 'unpaid');
 
-  // Admin marks Iqbal as PAID
+  // Admin marks Iqbal as PAID internally
   db.recordPayment({
     payrollItemId: iqbalItem.id,
     paymentMethod: 'bank_transfer',
@@ -360,14 +360,21 @@ test('Employee can see paid payslip on dashboard even if period is in CALCULATED
     actor,
   });
 
-  // Verify getEmployeePublishedPayslips returns Iqbal's paid payslip
+  // Strict confidentiality check: Before Admin publishes, employee cannot see the payslip
+  const unreleasedSlips = db.getEmployeePublishedPayslips('emp-0003');
+  assert.equal(unreleasedSlips.length, 0, 'Unpublished payslips must NOT be visible to employee');
+
+  // Admin reaches Step 7 and explicitly publishes payslips to staff
+  db.publishPayslips(run.id, actor);
+
+  // Now, employee can see the published payslip
   const publishedSlips = db.getEmployeePublishedPayslips('emp-0003');
-  assert.ok(publishedSlips.length > 0, 'Published payslips must contain at least 1 item');
+  assert.ok(publishedSlips.length > 0, 'Published payslips must contain at least 1 item after release');
 
   const latestSlip = publishedSlips[0];
   assert.equal(latestSlip.id, iqbalItem.id);
   assert.equal(latestSlip.paymentStatus, 'paid');
   assert.equal(latestSlip.paymentReference, 'EBL-TRX-123456');
-  assert.ok(latestSlip.publishedAt, 'publishedAt must be automatically set');
+  assert.ok(latestSlip.publishedAt, 'publishedAt must be set after publish');
 });
 
