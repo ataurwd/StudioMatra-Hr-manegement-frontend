@@ -190,4 +190,39 @@ test('Super Admin can delete attendance session to clear or mark absent', () => 
   assert.equal(afterDelete.length, 0);
 });
 
+test('Missing punch out session is counted as Present and credits standard work hours', () => {
+  const employees = db.getEmployees();
+  const targetEmp = employees[0];
+
+  // Insert a session with checkIn but no checkOut for a past day
+  const pastSession = db.adminUpsertAttendanceSession(
+    {
+      employeeId: targetEmp.id,
+      attendanceDate: '2026-11-08',
+      checkInTime: '09:37',
+      computedStatus: 'missing_punch',
+      notes: 'Test missing checkout',
+    },
+    { userId: 'test-admin', name: 'Admin Tester' }
+  );
+
+  assert.ok(pastSession);
+  assert.equal(pastSession.isMissingPunch, true);
+
+  // Run audit to normalize
+  db.auditMissingPunches();
+
+  const retrieved = db.getAttendanceSessions({
+    employeeId: targetEmp.id,
+    startDate: '2026-11-08',
+    endDate: '2026-11-08',
+  })[0];
+
+  assert.ok(retrieved);
+  // Missing punch should be classified as present/late and credited standard minutes
+  assert.equal(retrieved.isMissingPunch, true);
+  assert.ok(retrieved.computedStatus === 'present' || retrieved.computedStatus === 'late');
+  assert.equal(retrieved.workedMinutes, 480);
+});
+
 

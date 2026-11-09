@@ -209,6 +209,8 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
 
         if (session.workedMinutes > 0) {
           workedMinutesFormatted = formatMinutes(session.workedMinutes);
+        } else if (session.isMissingPunch) {
+          workedMinutesFormatted = formatMinutes(session.scheduledMinutes || 480);
         } else if (isToday && session.checkInAt && !session.checkOutAt) {
           const start = new Date(session.checkInAt).getTime();
           const diffMin = Math.max(0, Math.floor((Date.now() - start) / (1000 * 60)));
@@ -287,18 +289,28 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
       } else if (r.computedCategory === 'late') {
         presentDays++;
         lateDays++;
+      } else if (r.computedCategory === 'missing') {
+        // Missing punch out is counted as Present!
+        presentDays++;
+        if (r.session?.lateMinutes && r.session.lateMinutes > 0) {
+          lateDays++;
+        }
       } else if (r.computedCategory === 'half_day') {
         presentDays += 0.5;
       } else if (r.computedCategory === 'leave') {
         leaveDays++;
-      } else if (r.computedCategory === 'absent' || r.computedCategory === 'missing') {
+      } else if (r.computedCategory === 'absent') {
         absentDays++;
       } else if (r.computedCategory === 'weekend') {
         weekendDays++;
       }
 
-      if (r.session && r.session.workedMinutes > 0) {
-        totalMinutesWorked += r.session.workedMinutes;
+      if (r.session) {
+        if (r.session.workedMinutes > 0) {
+          totalMinutesWorked += r.session.workedMinutes;
+        } else if (r.computedCategory === 'missing') {
+          totalMinutesWorked += (r.session.scheduledMinutes || 480);
+        }
       }
     });
 
@@ -315,10 +327,10 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
   // Filtered records for list view
   const filteredListDays = useMemo(() => {
     if (statusFilter === 'all') return monthDays;
-    if (statusFilter === 'present') return monthDays.filter((d) => d.computedCategory === 'present' || d.computedCategory === 'late');
-    if (statusFilter === 'late') return monthDays.filter((d) => d.computedCategory === 'late');
+    if (statusFilter === 'present') return monthDays.filter((d) => d.computedCategory === 'present' || d.computedCategory === 'late' || d.computedCategory === 'missing');
+    if (statusFilter === 'late') return monthDays.filter((d) => d.computedCategory === 'late' || (d.computedCategory === 'missing' && (d.session?.lateMinutes || 0) > 0));
     if (statusFilter === 'leave') return monthDays.filter((d) => d.computedCategory === 'leave');
-    if (statusFilter === 'absent') return monthDays.filter((d) => d.computedCategory === 'absent' || d.computedCategory === 'missing');
+    if (statusFilter === 'absent') return monthDays.filter((d) => d.computedCategory === 'absent');
     if (statusFilter === 'workdays') return monthDays.filter((d) => !d.isWeekend);
     return monthDays;
   }, [monthDays, statusFilter]);
@@ -628,9 +640,9 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                 badgeBg = 'bg-purple-100 text-purple-900 border-purple-300';
                 statusText = leaveName || 'Leave';
               } else if (computedCategory === 'missing') {
-                cellBg = 'bg-rose-50/60 border-rose-200 hover:border-rose-400';
-                badgeBg = 'bg-rose-100 text-rose-900 border-rose-300';
-                statusText = 'Missing Out';
+                cellBg = 'bg-emerald-50/50 border-emerald-300 hover:border-emerald-500';
+                badgeBg = 'bg-amber-100 text-amber-900 border-amber-300';
+                statusText = record.session?.lateMinutes && record.session.lateMinutes > 0 ? `Present (Late ${record.session.lateMinutes}m)` : 'Present (Missing Out)';
               } else if (computedCategory === 'absent') {
                 cellBg = 'bg-red-50/30 border-red-200/80 hover:border-red-300';
                 badgeBg = 'bg-red-100 text-red-800 border-red-200';
@@ -812,8 +824,8 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                   );
                 } else if (computedCategory === 'missing') {
                   rowStatusBadge = (
-                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
-                      Missing Punch
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      Present (Missing Out)
                     </span>
                   );
                 } else if (computedCategory === 'absent') {
@@ -988,10 +1000,16 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                 <div>
                   <span className="text-[#717b77] block text-[11px]">Attendance Status</span>
                   <span className="font-bold uppercase text-[#1b4332] block mt-0.5">
-                    {selectedDayRecord.computedCategory.replace('_', ' ')}
+                    {selectedDayRecord.computedCategory === 'missing'
+                      ? 'Present (Missing Punch Out)'
+                      : selectedDayRecord.computedCategory.replace('_', ' ')}
                   </span>
                   <span className="text-[10px] text-[#86928e]">
-                    {selectedDayRecord.isToday ? 'Today (Active)' : 'Authoritative Record'}
+                    {selectedDayRecord.computedCategory === 'missing'
+                      ? 'Attended workday • Counted as Present'
+                      : selectedDayRecord.isToday
+                      ? 'Today (Active)'
+                      : 'Authoritative Record'}
                   </span>
                 </div>
               </div>

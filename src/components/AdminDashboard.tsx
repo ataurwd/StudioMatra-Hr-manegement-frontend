@@ -56,11 +56,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onN
   let leaveToday = 0;
 
   for (const s of todaySessions) {
-    if (s.computedStatus === 'present') presentToday++;
+    if (s.computedStatus === 'present' || s.computedStatus === 'missing_punch' || s.isMissingPunch) {
+      presentToday++;
+      if (s.lateMinutes > 0) lateToday++;
+    }
     else if (s.computedStatus === 'late') { presentToday++; lateToday++; }
     else if (s.computedStatus === 'half_day') presentToday += 0.5;
     else if (s.computedStatus === 'paid_leave' || s.computedStatus === 'unpaid_leave') leaveToday++;
-    else if (s.computedStatus === 'absent' || s.computedStatus === 'missing_punch') absentToday++;
+    else if (s.computedStatus === 'absent') absentToday++;
   }
 
   // Those who haven't checked in yet today and are not on leave

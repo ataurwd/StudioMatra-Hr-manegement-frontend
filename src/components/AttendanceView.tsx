@@ -352,7 +352,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                                   : s.computedStatus === 'half_day'
                                   ? 'bg-blue-50 text-blue-800 border border-blue-200'
                                   : s.computedStatus === 'missing_punch'
-                                  ? 'bg-red-50 text-red-800 border border-red-200'
+                                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
                                   : 'bg-stone-100 text-stone-700'
                               }`}
                             >

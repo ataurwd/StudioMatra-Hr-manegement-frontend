@@ -121,13 +121,16 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
   let totalMinutesWorked = 0;
 
   for (const s of monthlySessions) {
-    if (s.computedStatus === 'present') presentCount++;
+    if (s.computedStatus === 'present' || s.computedStatus === 'missing_punch' || s.isMissingPunch) {
+      presentCount++;
+      if (s.lateMinutes > 0) lateCount++;
+    }
     else if (s.computedStatus === 'late') { presentCount++; lateCount++; }
     else if (s.computedStatus === 'half_day') presentCount += 0.5;
     else if (s.computedStatus === 'paid_leave' || s.computedStatus === 'unpaid_leave') leaveCount++;
-    else if (s.computedStatus === 'absent' || s.computedStatus === 'missing_punch') absentCount++;
+    else if (s.computedStatus === 'absent') absentCount++;
 
-    totalMinutesWorked += s.workedMinutes;
+    totalMinutesWorked += s.workedMinutes > 0 ? s.workedMinutes : (s.isMissingPunch || s.computedStatus === 'missing_punch' ? 480 : 0);
   }
 
   const handleCheckIn = async () => {

@@ -583,9 +583,16 @@ class StudioMatraDatabase {
     let modified = false;
 
     for (const session of this.state.attendanceSessions) {
+      if (session.computedStatus === 'missing_punch') {
+        session.isMissingPunch = true;
+        session.computedStatus = session.lateMinutes > 0 ? 'late' : 'present';
+        session.workedMinutes = session.workedMinutes > 0 ? session.workedMinutes : (session.scheduledMinutes || 480);
+        modified = true;
+      }
       if (!session.checkOutAt && session.attendanceDate < todayDhaka && !session.isMissingPunch) {
         session.isMissingPunch = true;
-        session.computedStatus = 'missing_punch';
+        session.computedStatus = session.lateMinutes > 0 ? 'late' : 'present';
+        session.workedMinutes = session.workedMinutes > 0 ? session.workedMinutes : (session.scheduledMinutes || 480);
         modified = true;
       }
     }
@@ -1768,15 +1775,18 @@ class StudioMatraDatabase {
       let totalWorkedMinutes = 0;
 
       for (const s of sessions) {
-        if (s.computedStatus === 'present') totalPresent++;
+        if (s.computedStatus === 'present' || s.computedStatus === 'missing_punch' || s.isMissingPunch) {
+          totalPresent++;
+          if (s.lateMinutes > 0) totalLate++;
+        }
         else if (s.computedStatus === 'late') { totalPresent++; totalLate++; }
         else if (s.computedStatus === 'half_day') totalHalfDay++;
         else if (s.computedStatus === 'paid_leave') totalPaidLeave++;
         else if (s.computedStatus === 'unpaid_leave') totalUnpaidLeave++;
-        else if (s.computedStatus === 'absent' || s.computedStatus === 'missing_punch') totalAbsent++;
+        else if (s.computedStatus === 'absent') totalAbsent++;
 
-        totalOvertimeHours += Math.floor(s.overtimeMinutes / 60);
-        totalWorkedMinutes += s.workedMinutes;
+        totalOvertimeHours += Math.floor((s.overtimeMinutes || 0) / 60);
+        totalWorkedMinutes += s.workedMinutes > 0 ? s.workedMinutes : ((s.isMissingPunch || s.computedStatus === 'missing_punch') ? 480 : 0);
       }
 
       // If records are partial, provide realistic working month default for stable demonstration

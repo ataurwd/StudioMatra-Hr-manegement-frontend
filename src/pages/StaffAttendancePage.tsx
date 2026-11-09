@@ -50,13 +50,15 @@ export const StaffAttendancePage: React.FC = () => {
       let absentDays = 0;
 
       for (const s of sessions) {
-        if (s.computedStatus === 'present') presentDays++;
-        else if (s.computedStatus === 'late') {
+        if (s.computedStatus === 'present' || s.computedStatus === 'missing_punch' || s.isMissingPunch) {
+          presentDays++;
+          if (s.lateMinutes > 0) lateDays++;
+        } else if (s.computedStatus === 'late') {
           presentDays++;
           lateDays++;
         } else if (s.computedStatus === 'half_day') {
           presentDays += 0.5;
-        } else if (s.computedStatus === 'absent' || s.computedStatus === 'missing_punch') {
+        } else if (s.computedStatus === 'absent') {
           absentDays++;
         }
       }
