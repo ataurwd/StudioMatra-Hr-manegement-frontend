@@ -1643,6 +1643,82 @@ class StudioMatraDatabase {
     return newPeriod;
   }
 
+  public updatePayrollPeriod(
+    periodId: string,
+    updates: Partial<PayrollPeriod>,
+    actor: { userId: string; name: string }
+  ): PayrollPeriod {
+    const period = this.state.payrollPeriods.find((p) => p.id === periodId);
+    if (!period) throw new Error('Payroll period not found');
+
+    if (updates.month !== undefined) period.month = Number(updates.month);
+    if (updates.year !== undefined) period.year = Number(updates.year);
+    if (updates.periodStart !== undefined) period.periodStart = updates.periodStart;
+    if (updates.periodEnd !== undefined) period.periodEnd = updates.periodEnd;
+    if (updates.status !== undefined) period.status = updates.status;
+
+    this.logAudit(actor, {
+      targetType: 'payroll',
+      targetId: period.id,
+      action: 'UPDATE_PAYROLL_PERIOD',
+      details: `Updated payroll period ${period.id} (${period.month}/${period.year}, ${period.periodStart} to ${period.periodEnd}, Status: ${period.status})`,
+    });
+    this.notify();
+    return period;
+  }
+
+  public deletePayrollPeriod(
+    periodId: string,
+    actor: { userId: string; name: string }
+  ): boolean {
+    const periodIndex = this.state.payrollPeriods.findIndex((p) => p.id === periodId);
+    if (periodIndex === -1) return false;
+
+    const period = this.state.payrollPeriods[periodIndex];
+    this.state.payrollPeriods.splice(periodIndex, 1);
+
+    // Delete associated runs and items
+    const runsToDelete = this.state.payrollRuns.filter((r) => r.payrollPeriodId === periodId);
+    for (const run of runsToDelete) {
+      this.state.payrollItems = this.state.payrollItems.filter((i) => i.payrollRunId !== run.id);
+    }
+    this.state.payrollRuns = this.state.payrollRuns.filter((r) => r.payrollPeriodId !== periodId);
+
+    this.logAudit(actor, {
+      targetType: 'payroll',
+      targetId: periodId,
+      action: 'DELETE_PAYROLL_PERIOD',
+      details: `Deleted payroll period ${period.month}/${period.year} (${periodId}) and associated runs`,
+    });
+    this.notify();
+    return true;
+  }
+
+  public deletePayrollRun(
+    runId: string,
+    actor: { userId: string; name: string }
+  ): boolean {
+    const run = this.state.payrollRuns.find((r) => r.id === runId);
+    if (!run) return false;
+
+    this.state.payrollRuns = this.state.payrollRuns.filter((r) => r.id !== runId);
+    this.state.payrollItems = this.state.payrollItems.filter((i) => i.payrollRunId !== runId);
+
+    const period = this.state.payrollPeriods.find((p) => p.id === run.payrollPeriodId);
+    if (period) {
+      period.status = 'draft';
+    }
+
+    this.logAudit(actor, {
+      targetType: 'payroll',
+      targetId: runId,
+      action: 'DELETE_PAYROLL_RUN',
+      details: `Deleted payroll run ${runId} and reset period ${period?.id} to draft`,
+    });
+    this.notify();
+    return true;
+  }
+
   /**
    * STEP 2 & 3: Calculate Draft Payroll Run
    */
@@ -1945,6 +2021,50 @@ class StudioMatraDatabase {
       details: `Recorded payment of ৳${item.netAmount} to ${item.employeeName} via ${paymentMethod} (Ref: ${paymentReference})`,
     });
     this.notify();
+  }
+
+  public resetPayslipPayment(
+    payrollItemId: string,
+    actor: { userId: string; name: string }
+  ) {
+    const item = this.state.payrollItems.find((i) => i.id === payrollItemId);
+    if (!item) throw new Error('Payroll record not found');
+
+    item.paymentStatus = 'unpaid';
+    item.paymentReference = undefined;
+    item.paymentDate = undefined;
+    item.publishedAt = undefined;
+
+    this.logAudit(actor, {
+      targetType: 'payroll',
+      targetId: payrollItemId,
+      action: 'RESET_PAYMENT',
+      details: `Reverted/Reset payment for ${item.employeeName} (${payrollItemId}) back to UNPAID status`,
+    });
+    this.notify();
+    return item;
+  }
+
+  public resetAllPracticePayments(actor: { userId: string; name: string }): number {
+    let count = 0;
+    for (const item of this.state.payrollItems) {
+      if (item.paymentStatus === 'paid' || item.paymentReference || item.paymentDate) {
+        item.paymentStatus = 'unpaid';
+        item.paymentReference = undefined;
+        item.paymentDate = undefined;
+        item.publishedAt = undefined;
+        count++;
+      }
+    }
+
+    this.logAudit(actor, {
+      targetType: 'payroll',
+      targetId: 'all-payments',
+      action: 'RESET_PRACTICE_PAYMENTS',
+      details: `Reset ${count} practice payments across all payroll records back to UNPAID status`,
+    });
+    this.notify();
+    return count;
   }
 
   // -------------------------------------------------------------

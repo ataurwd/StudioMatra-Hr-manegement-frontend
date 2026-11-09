@@ -287,6 +287,68 @@ export async function apiCreatePayrollPeriod(month: number, year: number, name?:
   }
 }
 
+export async function apiUpdatePayrollPeriod(periodId: string, updates: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/periods/${periodId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiDeletePayrollPeriod(periodId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/periods/${periodId}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function apiDeletePayrollRun(runId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/runs/${runId}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function apiResetPayslipPayment(payrollItemId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/items/${payrollItemId}/payment`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paymentStatus: 'unpaid',
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function apiResetAllPracticePayments(): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/payroll/reset-practice-payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function apiPublishPayslips(runId: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/payroll/runs/${runId}/publish`, {

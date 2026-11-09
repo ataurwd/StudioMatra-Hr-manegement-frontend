@@ -24,6 +24,7 @@ import { AttendanceSession, Employee, RoleName, User } from '../types';
 import { formatMinutes } from '../utils/attendanceCalculator';
 import { canManageAttendance, hasPermission } from '../utils/permissions';
 import { AttendanceCalendarView } from './AttendanceCalendarView';
+import { AdminAttendanceEditModal } from './AdminAttendanceEditModal';
 
 interface AttendanceViewProps {
   currentUser: User;
@@ -67,6 +68,11 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [adminEditTarget, setAdminEditTarget] = useState<{
+    date: string;
+    employee: Employee;
+    session?: AttendanceSession;
+  } | null>(null);
 
   const employees = db.getEmployees();
   const departments = db.getDepartments();
@@ -77,10 +83,6 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
     }
     return s.isMissingPunch;
   });
-
-  const allCorrectionRequests = db.getCorrectionRequests(
-    isEmployeeRole && currentEmp ? currentEmp.id : undefined
-  );
 
   // Filter sessions
   const filteredSessions = allSessions.filter((s) => {
@@ -114,7 +116,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
           </div>
           <h1 className="text-2xl font-serif font-bold text-[#1c2120]">Studio Attendance Center</h1>
           <p className="text-xs text-[#6e7774] mt-0.5">
-            Authoritative check-in/out records, missing punch audit, and HR correction workflow
+            Authoritative check-in/out records, missing punch audit, and studio attendance management
           </p>
         </div>
 
@@ -207,11 +209,6 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
           employeeId={currentEmp?.id}
           currentUser={currentUser}
           allowEmployeeSwitch={canManage}
-          onRequestCorrection={(date, session) => {
-            setModalCorrectionDate(date);
-            setModalCorrectionSession(session || null);
-            setIsCustomCorrectionOpen(true);
-          }}
         />
       )}
 
@@ -363,16 +360,22 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <button
-                              onClick={() => {
-                                setModalCorrectionDate(s.attendanceDate);
-                                setModalCorrectionSession(s);
-                                setIsCustomCorrectionOpen(true);
-                              }}
-                              className="px-2.5 py-1 rounded bg-[#f4f1ea] hover:bg-[#eae6dc] text-[#1c2120] font-medium text-[11px] transition-colors cursor-pointer"
-                            >
-                              Adjust / Correct
-                            </button>
+                            {canManage && (
+                              <button
+                                onClick={() => {
+                                  if (emp) {
+                                    setAdminEditTarget({
+                                      date: s.attendanceDate,
+                                      employee: emp,
+                                      session: s,
+                                    });
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded bg-[#f4f1ea] hover:bg-[#eae6dc] text-[#1c2120] font-medium text-[11px] transition-colors cursor-pointer"
+                              >
+                                Edit Record
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -447,16 +450,22 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                           </td>
                           <td className="py-3 px-4 capitalize text-[#78827e]">{s.sourceType.replace('_', ' ')}</td>
                           <td className="py-3 px-4 text-right">
-                            <button
-                              onClick={() => {
-                                setModalCorrectionDate(s.attendanceDate);
-                                setModalCorrectionSession(s);
-                                setIsCustomCorrectionOpen(true);
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold text-xs transition-colors cursor-pointer"
-                            >
-                              Request Correction
-                            </button>
+                            {canManage && emp ? (
+                              <button
+                                onClick={() => {
+                                  setAdminEditTarget({
+                                    date: s.attendanceDate,
+                                    employee: emp,
+                                    session: s,
+                                  });
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold text-xs transition-colors cursor-pointer"
+                              >
+                                Audit & Resolve
+                              </button>
+                            ) : (
+                              <span className="text-stone-400 text-xs">Awaiting Admin Audit</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -469,92 +478,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </div>
       )}
 
-      {/* Tab 3: Correction Requests Workflow */}
-      {activeTab === 'corrections' && (
-        <div className="bg-white rounded-2xl border border-[#e8e4da] overflow-hidden shadow-xs">
-          <div className="p-5 border-b border-[#f0ece1] flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-sm text-[#1c2120]">Attendance Correction Register</h3>
-              <p className="text-xs text-[#717b77]">Submitted employee corrections awaiting review or application</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#f9f8f4] text-[#6d7572] uppercase font-bold text-[10px] border-b border-[#f0ece1]">
-                <tr>
-                  <th className="py-3 px-4">Employee</th>
-                  <th className="py-3 px-4">Target Date</th>
-                  <th className="py-3 px-4">Requested Punch Times</th>
-                  <th className="py-3 px-4">Reason Given</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Review Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f2eee6] text-[#2c3330]">
-                {allCorrectionRequests.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-[#7d8783]">
-                      No correction requests submitted.
-                    </td>
-                  </tr>
-                ) : (
-                  allCorrectionRequests.map((req) => {
-                    const emp = db.getEmployeeById(req.employeeId);
-                    return (
-                      <tr key={req.id} className="hover:bg-[#faf9f5]">
-                        <td className="py-3 px-4 font-semibold text-[#1c2120]">
-                          {emp?.fullName}{' '}
-                          <span className="text-[10px] font-mono text-[#78827e]">({emp?.employeeCode})</span>
-                        </td>
-                        <td className="py-3 px-4 font-mono font-medium">{req.attendanceDate}</td>
-                        <td className="py-3 px-4 font-mono text-xs">
-                          {req.requestedCheckIn || '—'} → {req.requestedCheckOut || '—'}
-                        </td>
-                        <td className="py-3 px-4 max-w-xs truncate text-[#505a56]" title={req.reason}>
-                          {req.reason}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                              req.status === 'applied'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : req.status === 'rejected'
-                                ? 'bg-red-100 text-red-800'
-                                : req.status === 'manager_reviewed'
-                                ? 'bg-teal-100 text-teal-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
-                          >
-                            {req.status.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {(canManage || isDeptManager) && req.status !== 'applied' && req.status !== 'rejected' ? (
-                            <button
-                              onClick={() => {
-                                setReviewRequest(req);
-                                setReviewComment('');
-                              }}
-                              className="px-3 py-1 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold text-xs transition-colors cursor-pointer"
-                            >
-                              Review & Decide
-                            </button>
-                          ) : (
-                            <span className="text-stone-400 text-xs">Completed</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 4: Office Network Policy Simulator */}
+      {/* Tab 3: Office Network Policy Simulator */}
       {activeTab === 'network' && (
         <div className="bg-white rounded-2xl p-6 border border-[#e8e4da] shadow-xs space-y-6">
           <div>
@@ -603,90 +527,18 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </div>
       )}
 
-      {/* Review Modal for HR / Manager */}
-      {reviewRequest && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-[#ded8cb] shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-4 border-b border-[#f0ece1]">
-              <h3 className="font-bold text-base text-[#1c2120]">Audit & Review Correction</h3>
-              <button
-                onClick={() => setReviewRequest(null)}
-                className="text-stone-400 hover:text-stone-700 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 mt-4 text-xs">
-              <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#ece7dc] space-y-1">
-                <p>
-                  <strong className="text-[#1c2120]">Target Date:</strong> {reviewRequest.attendanceDate}
-                </p>
-                <p>
-                  <strong className="text-[#1c2120]">Requested Time:</strong> {reviewRequest.requestedCheckIn} – {reviewRequest.requestedCheckOut}
-                </p>
-                <p>
-                  <strong className="text-[#1c2120]">Employee Reason:</strong> {reviewRequest.reason}
-                </p>
-              </div>
-
-              <div>
-                <label className="block font-bold text-[#1c2120] mb-1">Reviewer Note / Decision Comment</label>
-                <textarea
-                  rows={2}
-                  value={reviewComment}
-                  onChange={(e) => setReviewComment(e.target.value)}
-                  placeholder="e.g. Verified with project supervisor logs..."
-                  className="w-full p-2.5 border border-[#ded8cb] rounded-lg text-xs bg-[#faf9f5]"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-[#f0ece1]">
-                <button
-                  type="button"
-                  onClick={() => setReviewRequest(null)}
-                  className="px-3.5 py-2 rounded-lg bg-[#f4f1ea] hover:bg-[#eae6dc] font-semibold text-stone-700 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExecuteReview('reject')}
-                  className="px-3.5 py-2 rounded-lg bg-red-800 hover:bg-red-900 text-white font-bold cursor-pointer"
-                >
-                  Reject
-                </button>
-                {canManage ? (
-                  <button
-                    type="button"
-                    onClick={() => handleExecuteReview('apply')}
-                    className="px-4 py-2 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold cursor-pointer shadow-xs"
-                  >
-                    Apply Correction to Attendance
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleExecuteReview('manager_reviewed')}
-                    className="px-4 py-2 rounded-lg bg-teal-800 hover:bg-teal-900 text-white font-bold cursor-pointer"
-                  >
-                    Recommend for HR Approval
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Attendance Correction Modal for Employee */}
-      {isCustomCorrectionOpen && currentEmp && (
-        <AttendanceCorrectionModal
-          isOpen={isCustomCorrectionOpen}
-          onClose={() => setIsCustomCorrectionOpen(false)}
+      {/* Admin Attendance Audit & Override Modal */}
+      {adminEditTarget && (
+        <AdminAttendanceEditModal
+          isOpen={!!adminEditTarget}
+          onClose={() => setAdminEditTarget(null)}
+          dateStr={adminEditTarget.date}
+          employee={adminEditTarget.employee}
+          existingSession={adminEditTarget.session}
           currentUser={currentUser}
-          employeeId={currentEmp.id}
-          initialDate={modalCorrectionDate}
-          initialSession={modalCorrectionSession}
+          onSaved={() => {
+            setAdminEditTarget(null);
+          }}
         />
       )}
     </div>

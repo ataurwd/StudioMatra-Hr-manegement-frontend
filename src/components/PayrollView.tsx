@@ -8,14 +8,17 @@ import {
   CheckCircle2,
   ChevronRight,
   Download,
+  Edit,
   Eye,
   FileCheck,
   FileText,
   Lock,
   PlusCircle,
   RefreshCw,
+  RotateCcw,
   Search,
   ShieldAlert,
+  Trash2,
   Wallet,
   X,
 } from 'lucide-react';
@@ -24,8 +27,13 @@ import { generatePayslipPDF } from '../services/pdfGenerator';
 import {
   apiCalculatePayroll,
   apiCreatePayrollPeriod,
+  apiDeletePayrollPeriod,
+  apiDeletePayrollRun,
   apiPublishPayslips,
   apiRecordPayment,
+  apiResetAllPracticePayments,
+  apiResetPayslipPayment,
+  apiUpdatePayrollPeriod,
   apiUpdatePayrollRunStatus,
   syncWithBackend,
 } from '../services/apiService';
@@ -51,10 +59,18 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
   const canViewComp = canViewSalary(currentUser.role);
 
   const [activeTab, setActiveTab] = useState<'runs' | 'advances' | 'contracts'>('runs');
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('period-2026-10');
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>(() => db.getPayrollPeriods()[0]?.id || 'period-2026-03');
   const [isNewPeriodModalOpen, setIsNewPeriodModalOpen] = useState(false);
   const [newMonth, setNewMonth] = useState(11);
   const [newYear, setNewYear] = useState(2026);
+
+  // Edit period modal state
+  const [isEditPeriodModalOpen, setIsEditPeriodModalOpen] = useState(false);
+  const [editPeriodMonth, setEditPeriodMonth] = useState<number>(3);
+  const [editPeriodYear, setEditPeriodYear] = useState<number>(2026);
+  const [editPeriodStart, setEditPeriodStart] = useState<string>('');
+  const [editPeriodEnd, setEditPeriodEnd] = useState<string>('');
+  const [editPeriodStatus, setEditPeriodStatus] = useState<PayrollPeriod['status']>('draft');
 
   // Modals
   const [previewItem, setPreviewItem] = useState<PayrollItem | null>(null);
@@ -203,6 +219,99 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
       apiCreatePayrollPeriod(newMonth, newYear).catch(() => {});
     } catch (err: any) {
       alert(err.message || 'Error creating period');
+    }
+  };
+
+  const handleEditPeriod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPeriod) return;
+    try {
+      db.updatePayrollPeriod(
+        selectedPeriod.id,
+        {
+          month: editPeriodMonth,
+          year: editPeriodYear,
+          periodStart: editPeriodStart,
+          periodEnd: editPeriodEnd,
+          status: editPeriodStatus,
+        },
+        { userId: currentUser.id, name: currentUser.fullName }
+      );
+      await apiUpdatePayrollPeriod(selectedPeriod.id, {
+        month: editPeriodMonth,
+        year: editPeriodYear,
+        periodStart: editPeriodStart,
+        periodEnd: editPeriodEnd,
+        status: editPeriodStatus,
+      });
+      await syncWithBackend();
+      setIsEditPeriodModalOpen(false);
+    } catch (err: any) {
+      alert(err.message || 'Error updating period');
+    }
+  };
+
+  const handleDeletePeriod = async () => {
+    if (!selectedPeriod) return;
+    const confirmMsg = `Are you sure you want to delete payroll period ${selectedPeriod.month}/${selectedPeriod.year} (${selectedPeriod.id})?\n\nThis will permanently delete this period along with all its draft/calculated salary runs and line items.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const periodIdToDelete = selectedPeriod.id;
+      db.deletePayrollPeriod(periodIdToDelete, { userId: currentUser.id, name: currentUser.fullName });
+      await apiDeletePayrollPeriod(periodIdToDelete);
+      await syncWithBackend();
+      const remaining = db.getPayrollPeriods();
+      if (remaining.length > 0) {
+        setSelectedPeriodId(remaining[0].id);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error deleting period');
+    }
+  };
+
+  const handleDeleteRun = async () => {
+    if (!activeRun) return;
+    const confirmMsg = `Are you sure you want to reset this payroll calculation?\n\nThis will delete the current calculated run (${activeRun.id}) and reset the period back to DRAFT, allowing you to recalculate fresh with updated attendance.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      db.deletePayrollRun(activeRun.id, { userId: currentUser.id, name: currentUser.fullName });
+      await apiDeletePayrollRun(activeRun.id);
+      await syncWithBackend();
+    } catch (err: any) {
+      alert(err.message || 'Error resetting run');
+    }
+  };
+
+  const handleResetPayment = async (item: PayrollItem) => {
+    const confirmMsg = `Reset payment for ${item.employeeName} (${formatBDT(item.netAmount)}) back to UNPAID?\n\nThis will clear the transaction reference and unmark as paid.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      db.resetPayslipPayment(item.id, { userId: currentUser.id, name: currentUser.fullName });
+      await apiResetPayslipPayment(item.id);
+      await syncWithBackend();
+    } catch (err: any) {
+      alert(err.message || 'Error resetting payment');
+    }
+  };
+
+  const handleResetAllPracticePayments = async () => {
+    const paidCount = runItems.filter((i) => i.paymentStatus === 'paid').length;
+    if (paidCount === 0) {
+      alert('No paid items to reset in this period.');
+      return;
+    }
+    const confirmMsg = `Are you sure you want to reset ALL ${paidCount} practice/test payment(s) in this period back to UNPAID?\n\nAll payment references and disbursement dates will be cleared.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      db.resetAllPracticePayments({ userId: currentUser.id, name: currentUser.fullName });
+      await apiResetAllPracticePayments();
+      await syncWithBackend();
+    } catch (err: any) {
+      alert(err.message || 'Error resetting practice payments');
     }
   };
 
@@ -411,19 +520,61 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
           {/* Period Selector & 8-Step Workflow Status Header */}
           <div className="bg-white rounded-2xl p-6 border border-[#e8e4da] shadow-xs space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#f0ece1]">
-              <div className="flex items-center gap-3">
-                <label className="text-xs font-bold text-[#1c2120]">Active Payroll Period:</label>
-                <select
-                  value={selectedPeriod?.id}
-                  onChange={(e) => setSelectedPeriodId(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#ded8cb] bg-[#faf9f5] text-xs font-semibold focus:outline-none focus:border-[#1b4332]"
-                >
-                  {periods.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.month}/{p.year} ({p.periodStart} to {p.periodEnd}) — Status: {p.status.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold text-[#1c2120]">Active Payroll Period:</label>
+                  <select
+                    value={selectedPeriod?.id}
+                    onChange={(e) => setSelectedPeriodId(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg border border-[#ded8cb] bg-[#faf9f5] text-xs font-semibold focus:outline-none focus:border-[#1b4332]"
+                  >
+                    {periods.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.month}/{p.year} ({p.periodStart} to {p.periodEnd}) — Status: {p.status.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {canManage && selectedPeriod && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setEditPeriodMonth(selectedPeriod.month);
+                        setEditPeriodYear(selectedPeriod.year);
+                        setEditPeriodStart(selectedPeriod.periodStart);
+                        setEditPeriodEnd(selectedPeriod.periodEnd);
+                        setEditPeriodStatus(selectedPeriod.status);
+                        setIsEditPeriodModalOpen(true);
+                      }}
+                      title="Edit Period Dates & Status"
+                      className="px-2.5 py-1.5 rounded-lg border border-[#ded8cb] bg-[#faf9f5] hover:bg-[#eae6dc] text-[#1c2120] text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Edit className="w-3.5 h-3.5 text-[#CAA05C]" />
+                      <span>Edit</span>
+                    </button>
+
+                    <button
+                      onClick={handleDeletePeriod}
+                      title="Delete this Payroll Period"
+                      className="px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                      <span>Delete</span>
+                    </button>
+
+                    {activeRun && (
+                      <button
+                        onClick={handleDeleteRun}
+                        title="Delete Run and Reset Period to Draft"
+                        className="px-2.5 py-1.5 rounded-lg border border-stone-300 bg-[#f4f1ea] hover:bg-[#e8e4da] text-stone-700 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-stone-600" />
+                        <span>Reset Draft</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons based on status */}
@@ -544,11 +695,22 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
 
           {/* Payroll Items Table */}
           <div className="bg-white rounded-2xl border border-[#e8e4da] overflow-hidden shadow-xs">
-            <div className="p-5 border-b border-[#f0ece1] flex items-center justify-between">
+            <div className="p-5 border-b border-[#f0ece1] flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-bold text-sm text-[#1c2120]">Individual Employee Salary Line Items</h3>
                 <p className="text-xs text-[#717b77]">Accurate pro-rated earnings, leave deductions, and loan recoveries</p>
               </div>
+
+              {canManage && runItems.some((i) => i.paymentStatus === 'paid') && (
+                <button
+                  onClick={handleResetAllPracticePayments}
+                  className="px-3 py-1.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                  title="Reset all paid items in this period back to unpaid"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Reset Practice Payments</span>
+                </button>
+              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -623,13 +785,23 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
                             >
                               <Download className="w-3.5 h-3.5" />
                             </button>
+                            {canManage && item.paymentStatus === 'paid' && (
+                              <button
+                                onClick={() => handleResetPayment(item)}
+                                title="Reset payment back to UNPAID"
+                                className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <RotateCcw className="w-3 h-3 text-amber-800" />
+                                <span>Reset / Unpay</span>
+                              </button>
+                            )}
                             {canManage && item.paymentStatus !== 'paid' && (
                               <button
                                 onClick={() => {
                                   setPaymentModalItem(item);
                                   setPaymentRef(`EBL-TRX-${Math.floor(100000 + Math.random() * 900000)}`);
                                 }}
-                                className="px-2 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-[11px] cursor-pointer"
+                                className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-[11px] cursor-pointer"
                               >
                                 Pay
                               </button>
@@ -819,6 +991,106 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ currentUser }) => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payroll Period Modal */}
+      {isEditPeriodModalOpen && selectedPeriod && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-[#ded8cb] shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-[#f0ece1]">
+              <h3 className="font-bold text-base text-[#1c2120]">Edit Payroll Period</h3>
+              <button
+                onClick={() => setIsEditPeriodModalOpen(false)}
+                className="text-stone-400 hover:text-stone-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditPeriod} className="space-y-4 mt-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#1c2120] mb-1">Month</label>
+                  <select
+                    value={editPeriodMonth}
+                    onChange={(e) => setEditPeriodMonth(Number(e.target.value))}
+                    className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-[#faf9f5]"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+                      <option key={m} value={m}>
+                        {m} ({new Date(2026, m - 1, 1).toLocaleString('default', { month: 'long' })})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-[#1c2120] mb-1">Year</label>
+                  <input
+                    type="number"
+                    value={editPeriodYear}
+                    onChange={(e) => setEditPeriodYear(Number(e.target.value))}
+                    className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-[#faf9f5] font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#1c2120] mb-1">Period Start Date</label>
+                  <input
+                    type="date"
+                    value={editPeriodStart}
+                    onChange={(e) => setEditPeriodStart(e.target.value)}
+                    className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-[#faf9f5] font-mono text-xs"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-[#1c2120] mb-1">Period End Date</label>
+                  <input
+                    type="date"
+                    value={editPeriodEnd}
+                    onChange={(e) => setEditPeriodEnd(e.target.value)}
+                    className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-[#faf9f5] font-mono text-xs"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#1c2120] mb-1">Lifecycle Status</label>
+                <select
+                  value={editPeriodStatus}
+                  onChange={(e) => setEditPeriodStatus(e.target.value as any)}
+                  className="w-full p-2.5 border border-[#ded8cb] rounded-lg bg-[#faf9f5] font-semibold capitalize"
+                >
+                  <option value="draft">Draft (Initialized)</option>
+                  <option value="calculated">Calculated (Draft Run Ready)</option>
+                  <option value="reviewed">Reviewed (Finance Audit Complete)</option>
+                  <option value="approved">Approved (Authorised by Signatory)</option>
+                  <option value="finalized">Finalized (Locked & Sealed)</option>
+                  <option value="paid">Paid (All Disbursed)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#f0ece1]">
+                <button
+                  type="button"
+                  onClick={() => setIsEditPeriodModalOpen(false)}
+                  className="px-4 py-2 rounded-lg bg-[#f4f1ea] hover:bg-[#eae6dc] font-semibold text-stone-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold cursor-pointer shadow-xs"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

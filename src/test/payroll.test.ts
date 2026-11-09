@@ -378,3 +378,104 @@ test('Employee CANNOT see draft or unreleased payslips even if paid; payslip is 
   assert.ok(latestSlip.publishedAt, 'publishedAt must be set after publish');
 });
 
+test('Admin can edit an existing payroll period (dates, month, year, status)', () => {
+  const actor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' };
+  const period = db.createPayrollPeriod(8, 2026, actor);
+  assert.ok(period);
+  assert.equal(period.month, 8);
+
+  const updated = db.updatePayrollPeriod(
+    period.id,
+    {
+      month: 9,
+      periodStart: '2026-09-01',
+      periodEnd: '2026-09-30',
+      status: 'calculated',
+    },
+    actor
+  );
+
+  assert.equal(updated.month, 9);
+  assert.equal(updated.periodStart, '2026-09-01');
+  assert.equal(updated.status, 'calculated');
+});
+
+test('Admin can delete a payroll period along with its associated runs and items', () => {
+  const actor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' };
+  const period = db.createPayrollPeriod(12, 2026, actor);
+  assert.ok(period);
+
+  // Calculate run for this period
+  const run = db.calculateDraftPayroll(period.id, actor);
+  assert.ok(run);
+  const itemsBefore = db.getPayrollItems(run.id);
+  assert.ok(itemsBefore.length > 0);
+
+  // Delete the period
+  const deleted = db.deletePayrollPeriod(period.id, actor);
+  assert.equal(deleted, true);
+
+  // Verify period, run, and items are removed
+  const periodsAfter = db.getPayrollPeriods();
+  assert.equal(periodsAfter.some((p) => p.id === period.id), false);
+  const runsAfter = db.getPayrollRuns();
+  assert.equal(runsAfter.some((r) => r.payrollPeriodId === period.id), false);
+  const itemsAfter = db.getPayrollItems(run.id);
+  assert.equal(itemsAfter.length, 0);
+});
+
+test('Admin can reset a paid payslip back to UNPAID status and clear payment references', () => {
+  const actor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' };
+  const period = db.createPayrollPeriod(7, 2026, actor);
+  const run = db.calculateDraftPayroll(period.id, actor);
+  const items = db.getPayrollItems(run.id);
+  const target = items[0];
+
+  // Pay employee
+  db.recordPayment({
+    payrollItemId: target.id,
+    paymentMethod: 'bank_transfer',
+    paymentReference: 'TEST-REF-999',
+    paymentDate: '2026-07-31',
+    actor,
+  });
+
+  assert.equal(target.paymentStatus, 'paid');
+  assert.equal(target.paymentReference, 'TEST-REF-999');
+
+  // Reset payment
+  const resetItem = db.resetPayslipPayment(target.id, actor);
+  assert.equal(resetItem.paymentStatus, 'unpaid');
+  assert.equal(resetItem.paymentReference, undefined);
+  assert.equal(resetItem.paymentDate, undefined);
+  assert.equal(resetItem.publishedAt, undefined);
+});
+
+test('Admin can reset all practice payments in bulk', () => {
+  const actor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque' };
+  const period = db.createPayrollPeriod(6, 2026, actor);
+  const run = db.calculateDraftPayroll(period.id, actor);
+  const items = db.getPayrollItems(run.id);
+
+  // Pay first 2 employees
+  db.recordPayment({
+    payrollItemId: items[0].id,
+    paymentMethod: 'cash',
+    paymentReference: 'CASH-001',
+    paymentDate: '2026-06-30',
+    actor,
+  });
+  db.recordPayment({
+    payrollItemId: items[1].id,
+    paymentMethod: 'bkash',
+    paymentReference: 'BKASH-002',
+    paymentDate: '2026-06-30',
+    actor,
+  });
+
+  const count = db.resetAllPracticePayments(actor);
+  assert.ok(count >= 2);
+  assert.equal(items[0].paymentStatus, 'unpaid');
+  assert.equal(items[1].paymentStatus, 'unpaid');
+});
+
