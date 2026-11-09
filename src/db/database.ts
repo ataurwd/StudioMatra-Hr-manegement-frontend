@@ -950,7 +950,7 @@ class StudioMatraDatabase {
 
     this.state.correctionRequests.unshift(newReq);
 
-    // Notify HR
+    // Notify HR & Super Admin
     const hrUsers = this.state.users.filter((u) => u.role === 'hr_admin' || u.role === 'super_admin');
     for (const hr of hrUsers) {
       this.createNotification({
@@ -958,6 +958,7 @@ class StudioMatraDatabase {
         title: 'New Attendance Correction Request',
         message: `${actor.name} requested correction for ${data.attendanceDate}. Reason: ${data.reason}`,
         type: 'correction',
+        actionUrl: '/attendance?tab=corrections',
       });
     }
 
@@ -999,8 +1000,12 @@ class StudioMatraDatabase {
       let session = this.state.attendanceSessions.find((s) => s.id === req.sessionId || (s.employeeId === req.employeeId && s.attendanceDate === req.attendanceDate));
       
       const shift = this.state.shifts[0];
-      const checkInIso = req.requestedCheckIn ? `${req.attendanceDate}T${req.requestedCheckIn}:00.000Z` : (session?.checkInAt || `${req.attendanceDate}T09:00:00.000Z`);
-      const checkOutIso = req.requestedCheckOut ? `${req.attendanceDate}T${req.requestedCheckOut}:00.000Z` : (session?.checkOutAt || `${req.attendanceDate}T18:00:00.000Z`);
+      const checkInIso = req.requestedCheckIn
+        ? (req.requestedCheckIn.includes('T') ? req.requestedCheckIn : `${req.attendanceDate}T${req.requestedCheckIn.length === 5 ? req.requestedCheckIn + ':00' : req.requestedCheckIn}+06:00`)
+        : (session?.checkInAt || `${req.attendanceDate}T09:00:00+06:00`);
+      const checkOutIso = req.requestedCheckOut
+        ? (req.requestedCheckOut.includes('T') ? req.requestedCheckOut : `${req.attendanceDate}T${req.requestedCheckOut.length === 5 ? req.requestedCheckOut + ':00' : req.requestedCheckOut}+06:00`)
+        : (session?.checkOutAt || `${req.attendanceDate}T18:00:00+06:00`);
 
       const metrics = calculateSessionMetrics({
         checkInAt: checkInIso,
@@ -1051,6 +1056,7 @@ class StudioMatraDatabase {
           title: 'Attendance Correction Approved',
           message: `Your correction for ${req.attendanceDate} was approved and applied. Status updated to ${metrics.status}.`,
           type: 'correction',
+          actionUrl: '/attendance',
         });
       }
     } else if (action === 'reject') {
@@ -1065,6 +1071,7 @@ class StudioMatraDatabase {
           title: 'Attendance Correction Rejected',
           message: `Your correction for ${req.attendanceDate} was rejected: ${comment || 'No reason provided'}`,
           type: 'correction',
+          actionUrl: '/attendance',
         });
       }
     }

@@ -139,6 +139,32 @@ export async function apiAdminDeleteAttendance(sessionId: string): Promise<boole
   }
 }
 
+export async function apiSubmitCorrection(correction: any, actor?: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/corrections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ correction, actor }),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function apiReviewCorrection(requestId: string, action: string, comment?: string, reviewer?: any): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/corrections/${requestId}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, comment, reviewer }),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 // --- Employees Management ---
 export async function apiCreateEmployee(employee: any, pinCode?: string, password?: string): Promise<any> {
   try {

@@ -297,7 +297,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onN
 
                 {pendingCorrections.length > 0 && (
                   <div
-                    onClick={() => goTo('attendance')}
+                    onClick={() => goTo('attendance?tab=corrections')}
                     className="p-3.5 bg-white rounded-xl border border-[#f0deae] hover:border-amber-400 transition-colors cursor-pointer flex items-center justify-between"
                   >
                     <div>

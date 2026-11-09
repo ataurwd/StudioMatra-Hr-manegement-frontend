@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   AlertTriangle,
@@ -20,10 +20,12 @@ import {
   X,
 } from 'lucide-react';
 import { db } from '../db/database';
+import { apiReviewCorrection } from '../services/apiService';
 import { AttendanceCorrectionRequest, AttendanceSession, Employee, RoleName, User } from '../types';
 import { formatMinutes } from '../utils/attendanceCalculator';
 import { canManageAttendance, hasPermission } from '../utils/permissions';
 import { AttendanceCalendarView } from './AttendanceCalendarView';
+import { AttendanceCorrectionModal } from './AttendanceCorrectionModal';
 
 interface AttendanceViewProps {
   currentUser: User;
@@ -43,9 +45,24 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const canManage = canManageAttendance(currentUser.role);
   const isDeptManager = currentUser.role === 'department_manager';
 
-  const [activeTab, setActiveTab] = useState<'calendar' | 'register' | 'missing' | 'corrections' | 'network'>(
-    isEmployeeRole ? 'calendar' : 'register'
-  );
+  const [searchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
+  const initialTab =
+    urlTab && ['calendar', 'register', 'missing', 'corrections', 'network'].includes(urlTab)
+      ? (urlTab as 'calendar' | 'register' | 'missing' | 'corrections' | 'network')
+      : isEmployeeRole
+      ? 'calendar'
+      : 'register';
+
+  const [activeTab, setActiveTab] = useState<'calendar' | 'register' | 'missing' | 'corrections' | 'network'>(initialTab);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['calendar', 'register', 'missing', 'corrections', 'network'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
+
   const [selectedDate, setSelectedDate] = useState<string>(
     new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date())
   );
@@ -54,13 +71,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Correction Request Modals
-  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
-  const [selectedSessionForCorrection, setSelectedSessionForCorrection] = useState<AttendanceSession | null>(null);
-  const [correctionCheckIn, setCorrectionCheckIn] = useState('09:00');
-  const [correctionCheckOut, setCorrectionCheckOut] = useState('18:00');
-  const [correctionReason, setCorrectionReason] = useState('');
-  const [modalError, setModalError] = useState('');
-  const [modalSuccess, setModalSuccess] = useState('');
+  const [isCustomCorrectionOpen, setIsCustomCorrectionOpen] = useState(false);
+  const [modalCorrectionDate, setModalCorrectionDate] = useState<string | undefined>(undefined);
+  const [modalCorrectionSession, setModalCorrectionSession] = useState<AttendanceSession | null>(null);
 
   // Review Modal
   const [reviewRequest, setReviewRequest] = useState<AttendanceCorrectionRequest | null>(null);
@@ -99,69 +112,18 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
     return true;
   });
 
-  const handleOpenCorrection = (session: AttendanceSession) => {
-    setSelectedSessionForCorrection(session);
-    setCorrectionCheckIn(
-      new Date(session.checkInAt).toLocaleTimeString('en-GB', {
-        timeZone: 'Asia/Dhaka',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    );
-    setCorrectionCheckOut(
-      session.checkOutAt
-        ? new Date(session.checkOutAt).toLocaleTimeString('en-GB', {
-            timeZone: 'Asia/Dhaka',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
-        : '18:00'
-    );
-    setCorrectionReason('');
-    setModalError('');
-    setModalSuccess('');
-    setIsSubmitModalOpen(true);
-  };
-
-  const handleSubmitCorrection = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedSessionForCorrection) return;
-    if (!correctionReason.trim()) {
-      setModalError('Please specify the detailed operational reason for this correction.');
-      return;
-    }
-
-    try {
-      db.submitCorrectionRequest(
-        {
-          employeeId: selectedSessionForCorrection.employeeId,
-          sessionId: selectedSessionForCorrection.id,
-          attendanceDate: selectedSessionForCorrection.attendanceDate,
-          requestedCheckIn: correctionCheckIn,
-          requestedCheckOut: correctionCheckOut,
-          reason: correctionReason,
-        },
-        { userId: currentUser.id, name: currentUser.fullName }
-      );
-
-      setModalSuccess('Attendance correction request submitted to HR for audit and approval.');
-      setTimeout(() => {
-        setIsSubmitModalOpen(false);
-      }, 1500);
-    } catch (err: any) {
-      setModalError(err.message || 'Submission failed');
-    }
-  };
-
   const handleExecuteReview = (action: 'manager_reviewed' | 'apply' | 'reject') => {
     if (!reviewRequest) return;
     try {
+      const reviewer = { userId: currentUser.id, name: currentUser.fullName, role: currentUser.role };
       db.reviewCorrectionRequest({
         requestId: reviewRequest.id,
         action,
         comment: reviewComment,
-        reviewer: { userId: currentUser.id, name: currentUser.fullName, role: currentUser.role },
+        reviewer,
       });
+      // Synchronize review directly with MySQL backend
+      apiReviewCorrection(reviewRequest.id, action, reviewComment, reviewer).catch(() => {});
       setReviewRequest(null);
       setReviewComment('');
     } catch (err: any) {
@@ -195,6 +157,19 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
               <CalendarCheck className="w-4 h-4 text-[#CAA05C]" />
               <span>Staff Monthly Console</span>
             </Link>
+          )}
+          {currentEmp && (
+            <button
+              onClick={() => {
+                setModalCorrectionDate(undefined);
+                setModalCorrectionSession(null);
+                setIsCustomCorrectionOpen(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <Clock className="w-4 h-4" />
+              <span>Request Correction</span>
+            </button>
           )}
           <button
             onClick={onOpenKiosk}
@@ -293,12 +268,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
           currentUser={currentUser}
           allowEmployeeSwitch={canManage}
           onRequestCorrection={(date, session) => {
-            if (session) {
-              handleOpenCorrection(session);
-            } else {
-              setSelectedDate(date);
-              setActiveTab('register');
-            }
+            setModalCorrectionDate(date);
+            setModalCorrectionSession(session || null);
+            setIsCustomCorrectionOpen(true);
           }}
         />
       )}
@@ -452,7 +424,11 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                           </td>
                           <td className="py-3 px-4 text-right">
                             <button
-                              onClick={() => handleOpenCorrection(s)}
+                              onClick={() => {
+                                setModalCorrectionDate(s.attendanceDate);
+                                setModalCorrectionSession(s);
+                                setIsCustomCorrectionOpen(true);
+                              }}
                               className="px-2.5 py-1 rounded bg-[#f4f1ea] hover:bg-[#eae6dc] text-[#1c2120] font-medium text-[11px] transition-colors cursor-pointer"
                             >
                               Adjust / Correct
@@ -532,7 +508,11 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                           <td className="py-3 px-4 capitalize text-[#78827e]">{s.sourceType.replace('_', ' ')}</td>
                           <td className="py-3 px-4 text-right">
                             <button
-                              onClick={() => handleOpenCorrection(s)}
+                              onClick={() => {
+                                setModalCorrectionDate(s.attendanceDate);
+                                setModalCorrectionSession(s);
+                                setIsCustomCorrectionOpen(true);
+                              }}
                               className="px-3 py-1.5 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold text-xs transition-colors cursor-pointer"
                             >
                               Request Correction
@@ -683,95 +663,6 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </div>
       )}
 
-      {/* Submit Correction Modal */}
-      {isSubmitModalOpen && selectedSessionForCorrection && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-[#ded8cb] shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-4 border-b border-[#f0ece1]">
-              <h3 className="font-bold text-base text-[#1c2120]">Submit Attendance Correction</h3>
-              <button
-                onClick={() => setIsSubmitModalOpen(false)}
-                className="text-stone-400 hover:text-stone-700 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitCorrection} className="space-y-4 mt-4 text-xs">
-              <div className="p-3 rounded-lg bg-[#faf9f5] border border-[#ece7dc] space-y-1">
-                <p className="font-semibold text-[#1c2120]">Session Details:</p>
-                <p className="text-[#717b77]">
-                  Date: <span className="font-mono font-bold text-[#1c2120]">{selectedSessionForCorrection.attendanceDate}</span> | Original Status: <span className="uppercase font-bold text-[#1b4332]">{selectedSessionForCorrection.computedStatus}</span>
-                </p>
-              </div>
-
-              {modalError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs">
-                  {modalError}
-                </div>
-              )}
-
-              {modalSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs">
-                  {modalSuccess}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-[#1c2120] mb-1">Requested Check-In (HH:mm)</label>
-                  <input
-                    type="time"
-                    value={correctionCheckIn}
-                    onChange={(e) => setCorrectionCheckIn(e.target.value)}
-                    className="w-full p-2 border border-[#ded8cb] rounded-lg font-mono text-xs bg-[#faf9f5]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-[#1c2120] mb-1">Requested Check-Out (HH:mm)</label>
-                  <input
-                    type="time"
-                    value={correctionCheckOut}
-                    onChange={(e) => setCorrectionCheckOut(e.target.value)}
-                    className="w-full p-2 border border-[#ded8cb] rounded-lg font-mono text-xs bg-[#faf9f5]"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-[#1c2120] mb-1">Operational Reason / Documentation</label>
-                <textarea
-                  rows={3}
-                  value={correctionReason}
-                  onChange={(e) => setCorrectionReason(e.target.value)}
-                  placeholder="e.g. On-site architectural inspection in Gulshan; forgot to checkout upon return..."
-                  className="w-full p-2.5 border border-[#ded8cb] rounded-lg text-xs bg-[#faf9f5] focus:outline-none focus:border-[#1b4332]"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-[#f0ece1]">
-                <button
-                  type="button"
-                  onClick={() => setIsSubmitModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-[#f4f1ea] hover:bg-[#eae6dc] font-semibold text-stone-700 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold cursor-pointer shadow-xs"
-                >
-                  Submit for HR Audit
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Review Modal for HR / Manager */}
       {reviewRequest && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
@@ -846,6 +737,17 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Attendance Correction Modal for Employee */}
+      {isCustomCorrectionOpen && currentEmp && (
+        <AttendanceCorrectionModal
+          isOpen={isCustomCorrectionOpen}
+          onClose={() => setIsCustomCorrectionOpen(false)}
+          currentUser={currentUser}
+          employeeId={currentEmp.id}
+          initialDate={modalCorrectionDate}
+          initialSession={modalCorrectionSession}
+        />
       )}
     </div>
   );

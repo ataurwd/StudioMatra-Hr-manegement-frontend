@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Check, CheckCheck, Clock, FileText, Info, X } from 'lucide-react';
 import { db } from '../db/database';
 import { NotificationItem } from '../types';
@@ -16,14 +17,20 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   notifications,
   userId,
 }) => {
+  const navigate = useNavigate();
   if (!isOpen) return null;
 
   const handleMarkAllRead = () => {
     db.markAllNotificationsAsRead(userId);
   };
 
-  const handleMarkOne = (id: string) => {
-    db.markNotificationAsRead(id);
+  const handleNotificationClick = (n: NotificationItem) => {
+    db.markNotificationAsRead(n.id);
+    const targetUrl = n.actionUrl || (n.type === 'correction' ? '/attendance?tab=corrections' : undefined);
+    if (targetUrl) {
+      onClose();
+      navigate(targetUrl);
+    }
   };
 
   return (
@@ -61,7 +68,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
             notifications.map((n) => (
               <div
                 key={n.id}
-                onClick={() => handleMarkOne(n.id)}
+                onClick={() => handleNotificationClick(n)}
                 className={`p-3 rounded-xl border text-xs transition-colors cursor-pointer ${
                   n.isRead
                     ? 'bg-[#faf9f5] border-[#ece7dc] text-[#55605d]'

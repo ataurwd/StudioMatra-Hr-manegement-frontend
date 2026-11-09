@@ -190,3 +190,64 @@ test('Super Admin can delete attendance session to clear or mark absent', () => 
   assert.equal(afterDelete.length, 0);
 });
 
+test('Employee can submit attendance correction request, Super Admin receives notification, and Admin review marks attendance present and notifies employee', () => {
+  const empActor = { userId: 'user-0003', name: 'Ar. Iqbal Hossain' };
+  const adminActor = { userId: 'user-0001', name: 'IAr. Md. Ishtiaque Haque', role: 'super_admin' };
+
+  // 1. Employee submits correction request for 2026-11-15 (which had no punches / absent)
+  const correction = db.submitCorrectionRequest(
+    {
+      employeeId: 'emp-0003',
+      attendanceDate: '2026-11-15',
+      requestedCheckIn: '09:00',
+      requestedCheckOut: '18:00',
+      reason: 'Was supervising site construction in Banani, forgot to punch at office reception terminal',
+    },
+    empActor
+  );
+
+  assert.ok(correction);
+  assert.equal(correction.status, 'submitted');
+  assert.equal(correction.employeeId, 'emp-0003');
+  assert.equal(correction.attendanceDate, '2026-11-15');
+
+  // 2. Super Admin receives an in-app notification
+  const adminNotifications = db.getNotifications('user-0001');
+  const foundNotif = adminNotifications.find(
+    (n) => n.type === 'correction' && n.message.includes('Ar. Iqbal Hossain') && n.message.includes('2026-11-15')
+  );
+  assert.ok(foundNotif, 'Super Admin must receive a notification for the correction request');
+  assert.equal(foundNotif.title, 'New Attendance Correction Request');
+
+  // 3. Super Admin reviews and approves the correction request
+  db.reviewCorrectionRequest({
+    requestId: correction.id,
+    action: 'apply',
+    comment: 'Verified with site supervisor logbook. Approved as Present.',
+    reviewer: adminActor,
+  });
+
+  // 4. Verify correction status is now 'applied'
+  const updatedCorrection = db.getCorrectionRequests('emp-0003').find((c) => c.id === correction.id);
+  assert.ok(updatedCorrection);
+  assert.equal(updatedCorrection.status, 'applied');
+  assert.equal(updatedCorrection.approvedBy, 'user-0001');
+
+  // 5. Verify attendance session for that date now exists with status 'present'
+  const sessions = db.getAttendanceSessions({
+    employeeId: 'emp-0003',
+    startDate: '2026-11-15',
+    endDate: '2026-11-15',
+  });
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].computedStatus, 'present');
+  assert.equal(sessions[0].correctionStatus, 'applied');
+
+  // 6. Verify employee receives notification that correction was approved
+  const empNotifications = db.getNotifications('user-0003');
+  const approvalNotif = empNotifications.find(
+    (n) => n.type === 'correction' && n.title === 'Attendance Correction Approved'
+  );
+  assert.ok(approvalNotif, 'Employee must receive approval notification');
+});
+
