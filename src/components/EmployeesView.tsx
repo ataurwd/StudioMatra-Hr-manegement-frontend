@@ -1088,7 +1088,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
       });
 
       if (!apiRes.success) {
-        setErrorMsg(apiRes.error || 'Failed to save changes to MySQL database. Please verify connection.');
+        setErrorMsg(apiRes.error || 'Failed to save changes to MongoDB database. Please verify connection.');
         return;
       }
 
@@ -1141,7 +1141,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
       await syncWithBackend().catch(() => {});
 
-      onSuccess(`Successfully saved ${cleanPassword ? 'profile, login password & ' : ''}all changes directly to MySQL database for ${cleanFullName}.`);
+      onSuccess(`Successfully saved ${cleanPassword ? 'profile, login password & ' : ''}all changes directly to MongoDB database for ${cleanFullName}.`);
     } catch (err: any) {
       setErrorMsg(err.message || 'Update failed');
     } finally {
@@ -1416,7 +1416,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                         <span>Portal Credentials, Role & Status</span>
                       </label>
                       <p className="text-[11px] text-[#717b77]">
-                        Updates email, password, role, and login status directly in the MySQL database.
+                        Updates email, password, role, and login status directly in the MongoDB database.
                       </p>
                     </div>
                   </div>

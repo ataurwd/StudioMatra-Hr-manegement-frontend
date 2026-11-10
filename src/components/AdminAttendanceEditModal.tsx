@@ -211,7 +211,7 @@ export const AdminAttendanceEditModal: React.FC<AdminAttendanceEditModalProps> =
       // 2. Sync live to backend and MySQL
       await apiAdminOverrideAttendance(payload);
 
-      setSuccessMsg('Attendance record updated and saved to MySQL successfully.');
+      setSuccessMsg('Attendance record updated and saved to MongoDB successfully.');
       setTimeout(() => {
         onSaved();
         onClose();

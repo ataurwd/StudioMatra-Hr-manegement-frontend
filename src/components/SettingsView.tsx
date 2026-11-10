@@ -237,7 +237,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser }) => {
   const handleResetDatabase = async () => {
     const ok = await syncWithBackend();
     if (ok) {
-      setSaveSuccess('Synchronized 100% live records directly from MySQL database.');
+      setSaveSuccess('Synchronized 100% live records directly from MongoDB database.');
       setTimeout(() => setSaveSuccess(''), 3500);
     } else {
       alert('Unable to reach live backend database server.');
