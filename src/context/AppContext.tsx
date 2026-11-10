@@ -39,16 +39,19 @@ function sanitizeUserForStorage(user: User): User {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<User[]>(() => db.getUsers());
 
-  // Load authenticated user from localStorage, or null
+  // Load authenticated user from localStorage, verified once live DB sync finishes
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Verify user still exists in DB
-        const existing = db.getUserById(parsed.id);
-        if (existing && existing.accountStatus === 'active') {
-          return existing;
+        if (parsed && parsed.id && parsed.accountStatus === 'active') {
+          const existing = db.getUserById(parsed.id);
+          if (existing) {
+            return existing.accountStatus === 'active' ? existing : null;
+          }
+          // Keep session intact briefly while initial live DB sync runs on page reload
+          return parsed;
         }
       }
     } catch (e) {
@@ -73,36 +76,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(() => {
-    // Attempt background sync with backend API on mount
-    syncWithBackend().catch(() => {});
-
     const handleDbUpdate = () => {
-      setUsers(db.getUsers());
+      const liveUsers = db.getUsers();
+      setUsers(liveUsers);
       setCurrentUser((prev) => {
-        if (prev?.id) {
+        if (prev?.id && liveUsers.length > 0) {
           const freshUser = db.getUserById(prev.id);
           if (freshUser && freshUser.accountStatus === 'active') {
             localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sanitizeUserForStorage(freshUser)));
             return freshUser;
           }
+          // Account was deleted or suspended in live DB
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+          return null;
         }
-        try {
-          const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            const fresh = db.getUserById(parsed.id);
-            if (fresh && fresh.accountStatus === 'active') {
-              return fresh;
-            }
-          }
-        } catch {}
         return prev;
       });
       refreshNotifications();
     };
 
-    handleDbUpdate();
     const unsubscribe = db.subscribe(handleDbUpdate);
+    syncWithBackend().then((synced) => {
+      if (synced) handleDbUpdate();
+    }).catch(() => {});
+
     return unsubscribe;
   }, [currentUser?.id]);
 

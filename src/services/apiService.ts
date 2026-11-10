@@ -36,18 +36,35 @@ export async function checkBackendHealth(): Promise<HealthResponse | null> {
  */
 export async function syncWithBackend(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/sync/master`, { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(`${API_BASE}/sync/master`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
+    });
     if (!res.ok) return false;
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) return false;
     const remoteData = await res.json();
-    if (remoteData && (remoteData.users?.length > 0 || remoteData.employees?.length > 0)) {
+    if (remoteData && Array.isArray(remoteData.employees)) {
       db.syncFromRemote(remoteData);
       return true;
     }
     return false;
   } catch {
     return false;
+  }
+}
+
+async function safeJsonRequest(url: string, options: RequestInit): Promise<{ success: boolean; error?: string; data?: any }> {
+  try {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type') || '';
+    const data = contentType.includes('application/json') ? await res.json() : null;
+    if (!res.ok) {
+      return { success: false, error: data?.error || `Server error (${res.status})`, data };
+    }
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Unable to connect to database server' };
   }
 }
 
@@ -204,41 +221,60 @@ export async function apiReviewCorrection(requestId: string, action: string, com
 }
 
 // --- Employees Management ---
-export async function apiCreateEmployee(employee: any, pinCode?: string, password?: string): Promise<any> {
-  try {
-    const res = await fetch(`${API_BASE}/employees`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employee, pinCode, password }),
-    });
-    return await res.json();
-  } catch {
-    return null;
-  }
+export async function apiCreateEmployee(
+  employee: any,
+  pinCode?: string,
+  password?: string,
+  role?: string,
+  salaryContract?: any
+): Promise<{ success: boolean; error?: string; employee?: any; user?: any; salaryContract?: any }> {
+  const res = await safeJsonRequest(`${API_BASE}/employees`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employee, pinCode, password, role, salaryContract }),
+  });
+  return {
+    success: res.success,
+    error: res.error,
+    employee: res.data?.employee,
+    user: res.data?.user,
+    salaryContract: res.data?.salaryContract,
+  };
 }
 
-export async function apiUpdateEmployee(employeeId: string, updates: any): Promise<any> {
-  try {
-    const res = await fetch(`${API_BASE}/employees/${employeeId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    return await res.json();
-  } catch {
-    return null;
-  }
+export async function apiUpdateEmployee(
+  employeeId: string,
+  updates: any
+): Promise<{ success: boolean; error?: string; employee?: any; user?: any; salaryContract?: any }> {
+  const res = await safeJsonRequest(`${API_BASE}/employees/${employeeId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return {
+    success: res.success,
+    error: res.error,
+    employee: res.data?.employee,
+    user: res.data?.user,
+    salaryContract: res.data?.salaryContract,
+  };
 }
 
-export async function apiDeleteEmployee(employeeId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/employees/${employeeId}`, {
-      method: 'DELETE',
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+export async function apiUpdateSalaryContract(
+  employeeId: string,
+  contractUpdates: any
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  return safeJsonRequest(`${API_BASE}/payroll/contracts/${employeeId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(contractUpdates),
+  });
+}
+
+export async function apiDeleteEmployee(employeeId: string): Promise<{ success: boolean; error?: string }> {
+  return safeJsonRequest(`${API_BASE}/employees/${employeeId}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function apiUpdateEmployeePin(
@@ -246,29 +282,21 @@ export async function apiUpdateEmployeePin(
   pinCode: string,
   actorRole?: string
 ): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/employees/${employeeId}/pin`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pinCode, actorRole }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const res = await safeJsonRequest(`${API_BASE}/employees/${employeeId}/pin`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pinCode, actorRole }),
+  });
+  return res.success;
 }
 
 export async function apiUpdateEmployeePassword(employeeId: string, newPassword: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/employees/${employeeId}/password`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ newPassword }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const res = await safeJsonRequest(`${API_BASE}/employees/${employeeId}/password`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newPassword }),
+  });
+  return res.success;
 }
 
 // --- Leave Management ---

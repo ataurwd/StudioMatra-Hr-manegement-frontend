@@ -32,8 +32,7 @@ import {
   apiCreateEmployee,
   apiUpdateEmployee,
   apiDeleteEmployee,
-  apiUpdateEmployeePin,
-  apiUpdateEmployeePassword,
+  syncWithBackend,
 } from '../services/apiService';
 
 interface EmployeesViewProps {
@@ -46,8 +45,13 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
 
   const [, setDbTick] = useState(0);
   useEffect(() => {
-    return db.subscribe(() => setDbTick((t) => t + 1));
+    const unsub = db.subscribe(() => setDbTick((t) => t + 1));
+    // Always fetch fresh Studio Directory & user records directly from MySQL
+    syncWithBackend().catch(() => {});
+    return unsub;
   }, []);
+
+  const [isCreating, setIsCreating] = useState(false);
 
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -82,14 +86,19 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
     if (selectedDept !== 'all' && e.departmentId !== selectedDept) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      if (!e.fullName.toLowerCase().includes(q) && !e.employeeCode.toLowerCase().includes(q)) {
+      const userEmail = db.getUserByEmployeeId(e.id)?.email || e.email;
+      if (
+        !e.fullName.toLowerCase().includes(q) &&
+        !e.employeeCode.toLowerCase().includes(q) &&
+        !userEmail.toLowerCase().includes(q)
+      ) {
         return false;
       }
     }
     return true;
   });
 
-  const handleCreateEmployee = (e: React.FormEvent) => {
+  const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
@@ -108,14 +117,29 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
       return;
     }
 
+    setIsCreating(true);
     try {
-      const newUserId = 'user-' + Date.now();
-      const newEmp = db.createEmployee(
+      const cleanEmail = email.trim().toLowerCase();
+      const employeeCode = `SM-${String(employees.length + 1).padStart(4, '0')}`;
+      const empId = 'emp-' + Date.now();
+      const userId = 'usr-' + Date.now();
+      const salaryPayload = {
+        salaryType: 'monthly' as const,
+        basicSalary: Number(basicSalary),
+        houseRentAllowance: Math.round(Number(basicSalary) * 0.5),
+        medicalAllowance: 5000,
+        transportAllowance: 5000,
+        otherFixedAllowances: 2000,
+        effectiveFrom: joiningDate,
+      };
+
+      const apiRes = await apiCreateEmployee(
         {
-          userId: newUserId,
-          employeeCode: `SM-${String(employees.length + 1).padStart(4, '0')}`,
-          fullName,
-          email,
+          id: empId,
+          userId,
+          employeeCode,
+          fullName: fullName.trim(),
+          email: cleanEmail,
           phone,
           departmentId,
           designationId,
@@ -132,75 +156,56 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
           },
           paymentDetails: {
             bankName: 'Eastern Bank Ltd',
-            accountName: fullName,
+            accountName: fullName.trim(),
             accountNumber: '104100' + Math.floor(1000000 + Math.random() * 9000000),
             branchName: 'Banani Branch',
           },
         },
-        { userId: currentUser.id, name: currentUser.fullName },
-        {
-          pinCode: pinCode || undefined,
-          password: accountPassword.trim() || 'matra1234',
-          role: assignedRole,
-        }
+        pinCode || undefined,
+        accountPassword.trim() || 'matra1234',
+        assignedRole,
+        salaryPayload
       );
 
-      // Create salary contract
-      db.getSalaryContracts().push({
-        id: 'sc-' + Date.now(),
-        employeeId: newEmp.id,
-        salaryType: 'monthly',
-        basicSalary,
-        houseRentAllowance: Math.round(basicSalary * 0.5),
-        medicalAllowance: 5000,
-        transportAllowance: 5000,
-        otherFixedAllowances: 2000,
-        effectiveFrom: joiningDate,
-        status: 'active',
-      });
+      if (!apiRes.success || !apiRes.employee) {
+        setFormError(apiRes.error || 'Failed to save new employee to database.');
+        return;
+      }
 
-      // Direct MySQL Database Synchronization via Backend REST API
-      apiCreateEmployee(
-        {
-          userId: newUserId,
-          employeeCode: newEmp.employeeCode,
-          fullName: newEmp.fullName,
-          email: newEmp.email,
-          phone: newEmp.phone,
-          departmentId: newEmp.departmentId,
-          designationId: newEmp.designationId,
-          joiningDate: newEmp.joiningDate,
-          employmentStatus: 'active',
-          employmentType: addEmploymentType,
-          shiftId: 'shift-standard',
-        },
-        pinCode || undefined,
-        accountPassword.trim() || 'matra1234'
-      ).catch((err) => console.warn('[Direct DB Create Sync Failed]:', err));
+      db.upsertEmployee(apiRes.employee);
+      if (apiRes.user) db.upsertUser(apiRes.user);
+      if (apiRes.salaryContract) db.upsertSalaryContract(apiRes.salaryContract);
+      await syncWithBackend().catch(() => {});
 
       setIsAddModalOpen(false);
       setFullName('');
       setEmail('');
       setAccountPassword('matra1234');
       setAssignedRole('employee');
-      setSuccessBanner(`Employee ${newEmp.fullName} (${newEmp.employeeCode}) onboarded with Login Password & Kiosk PIN (${pinCode}).`);
+      setSuccessBanner(`Employee ${apiRes.employee.fullName} (${apiRes.employee.employeeCode}) saved to database with Login Password & Kiosk PIN (${pinCode}).`);
       setTimeout(() => setSuccessBanner(''), 4500);
     } catch (err: any) {
       setFormError(err.message || 'Creation failed');
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  const handleDeleteEmployee = (emp: Employee) => {
+  const handleDeleteEmployee = async (emp: Employee) => {
     try {
+      const apiRes = await apiDeleteEmployee(emp.id);
+      if (!apiRes.success) {
+        alert(apiRes.error || 'Failed to delete employee from database');
+        return;
+      }
+
       db.deleteEmployee(emp.id, {
         userId: currentUser.id,
         name: currentUser.fullName,
       });
+      await syncWithBackend().catch(() => {});
 
-      // Direct MySQL Database Synchronization via Backend REST API
-      apiDeleteEmployee(emp.id).catch((err) => console.warn('[Direct DB Delete Sync Failed]:', err));
-
-      setSuccessBanner(`Employee ${emp.fullName} (${emp.employeeCode}) was successfully deleted.`);
+      setSuccessBanner(`Employee ${emp.fullName} (${emp.employeeCode}) was permanently removed from database.`);
       setTimeout(() => setSuccessBanner(''), 4000);
       setEmployeeToDelete(null);
       if (selectedEmployee?.id === emp.id) setSelectedEmployee(null);
@@ -348,7 +353,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
                   </div>
                   <div className="flex items-center gap-2">
                     <Mail className="w-3.5 h-3.5 text-[#737e7a]" />
-                    <span className="truncate">{emp.email}</span>
+                    <span className="truncate">{db.getUserByEmployeeId(emp.id)?.email || emp.email}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -894,9 +899,10 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({ currentUser }) => 
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold cursor-pointer shadow-xs"
+                  disabled={isCreating}
+                  className="px-5 py-2 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] disabled:opacity-60 text-[#171c1b] font-bold cursor-pointer shadow-xs"
                 >
-                  Save & Onboard
+                  {isCreating ? 'Saving to Database...' : 'Save & Onboard'}
                 </button>
               </div>
             </form>
@@ -943,10 +949,13 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   const [pinCode, setPinCode] = useState(userAccount?.pinCode || '');
   const [resetPassword, setResetPassword] = useState('');
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [role, setRole] = useState<RoleName>(userAccount?.role || 'employee');
+  const [accountStatus, setAccountStatus] = useState<'active' | 'suspended'>(userAccount?.accountStatus || 'active');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Profile Fields
   const [fullName, setFullName] = useState(employee.fullName);
-  const [email, setEmail] = useState(employee.email);
+  const [email, setEmail] = useState(userAccount?.email || employee.email);
   const [phone, setPhone] = useState(employee.phone);
   const [departmentId, setDepartmentId] = useState(employee.departmentId);
   const [designationId, setDesignationId] = useState(employee.designationId);
@@ -1005,7 +1014,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
     setHouseRentAllowance(Math.round(Number(basicSalary || 0) * 0.5));
   };
 
-  const handleSaveAll = (e: React.FormEvent) => {
+  const handleSaveAll = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -1014,13 +1023,81 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
       return;
     }
 
+    if (canManageEmployees && pinCode && !/^\d{4}$/.test(pinCode)) {
+      setErrorMsg('Kiosk Security PIN must be exactly 4 numeric digits.');
+      return;
+    }
+
+    const cleanPassword = resetPassword.trim();
+    if (canManageEmployees && cleanPassword && cleanPassword.length < 6) {
+      setErrorMsg('New password must be at least 6 characters.');
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanFullName = fullName.trim();
+    const emergencyContactPayload = {
+      name: emergencyName,
+      relationship: emergencyRelation,
+      phone: emergencyPhone,
+    };
+    const paymentDetailsPayload = {
+      bankName,
+      accountName,
+      accountNumber,
+      branchName,
+      bkashNumber,
+    };
+    const salaryPayload = canSeeComp
+      ? {
+          basicSalary: Number(basicSalary),
+          houseRentAllowance: Number(houseRentAllowance),
+          medicalAllowance: Number(medicalAllowance),
+          transportAllowance: Number(transportAllowance),
+          otherFixedAllowances: Number(otherFixedAllowances),
+          effectiveFrom,
+          notes: salaryNotes || 'Salary contract revision',
+        }
+      : undefined;
+
+    setIsSaving(true);
     try {
-      // 1. Update Core Employee Details
+      // 1. DIRECT ATOMIC DATABASE WRITE VIA BACKEND REST API FIRST
+      const apiRes = await apiUpdateEmployee(employee.id, {
+        fullName: cleanFullName,
+        email: cleanEmail,
+        phone,
+        departmentId,
+        designationId,
+        customDesignation: customDesignation.trim() || undefined,
+        employmentStatus,
+        employmentType,
+        adhocJobTitle: employmentType === 'adhoc' || adhocJobTitle.trim() ? adhocJobTitle.trim() : undefined,
+        shiftId,
+        emergencyContact: emergencyContactPayload,
+        paymentDetails: paymentDetailsPayload,
+        ...(canManageEmployees
+          ? {
+              role,
+              accountStatus,
+              pinCode: pinCode || undefined,
+              password: cleanPassword || undefined,
+            }
+          : {}),
+        ...(salaryPayload ? { salaryContract: salaryPayload } : {}),
+      });
+
+      if (!apiRes.success) {
+        setErrorMsg(apiRes.error || 'Failed to save changes to MySQL database. Please verify connection.');
+        return;
+      }
+
+      // 2. Sync confirmed live DB state into local repository immediately
       db.updateEmployee(
         employee.id,
         {
-          fullName,
-          email,
+          fullName: cleanFullName,
+          email: cleanEmail,
           phone,
           departmentId,
           designationId,
@@ -1029,45 +1106,25 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
           employmentType,
           adhocJobTitle: employmentType === 'adhoc' || adhocJobTitle.trim() ? adhocJobTitle.trim() : undefined,
           shiftId,
-          emergencyContact: {
-            name: emergencyName,
-            relationship: emergencyRelation,
-            phone: emergencyPhone,
-          },
-          paymentDetails: {
-            bankName,
-            accountName,
-            accountNumber,
-            branchName,
-            bkashNumber,
-          },
+          emergencyContact: emergencyContactPayload,
+          paymentDetails: paymentDetailsPayload,
+          ...(canManageEmployees ? { role, accountStatus } : {}),
         },
         { userId: currentUser.id, name: currentUser.fullName }
       );
 
-      // 2. Update Salary Structure (if authorized)
-      if (canSeeComp) {
-        db.updateSalaryContract(
-          employee.id,
-          {
-            basicSalary: Number(basicSalary),
-            houseRentAllowance: Number(houseRentAllowance),
-            medicalAllowance: Number(medicalAllowance),
-            transportAllowance: Number(transportAllowance),
-            otherFixedAllowances: Number(otherFixedAllowances),
-            effectiveFrom,
-            notes: salaryNotes || 'Salary contract revision',
-          },
-          { userId: currentUser.id, name: currentUser.fullName }
-        );
+      if (apiRes.employee) db.upsertEmployee(apiRes.employee);
+      if (apiRes.user) db.upsertUser(apiRes.user);
+      if (apiRes.salaryContract) {
+        db.upsertSalaryContract(apiRes.salaryContract);
+      } else if (salaryPayload) {
+        db.updateSalaryContract(employee.id, salaryPayload, {
+          userId: currentUser.id,
+          name: currentUser.fullName,
+        });
       }
 
-      // 3. Update Kiosk Security PIN (if authorized)
       if (canManageEmployees && pinCode) {
-        if (!/^\d{4}$/.test(pinCode)) {
-          setErrorMsg('Kiosk Security PIN must be exactly 4 numeric digits.');
-          return;
-        }
         db.updateEmployeePin(employee.id, pinCode, {
           userId: currentUser.id,
           name: currentUser.fullName,
@@ -1075,44 +1132,20 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
         });
       }
 
-      // 4. Reset Portal Password (if authorized and provided)
-      if (canManageEmployees && resetPassword.trim()) {
-        if (resetPassword.trim().length < 6) {
-          setErrorMsg('New password must be at least 6 characters.');
-          return;
-        }
-        db.resetUserPassword(employee.id, resetPassword.trim(), {
+      if (canManageEmployees && cleanPassword) {
+        db.resetUserPassword(employee.id, cleanPassword, {
           userId: currentUser.id,
           name: currentUser.fullName,
         });
       }
 
-      // 5. DIRECT DATABASE SYNC VIA BACKEND REST API
-      const cleanEmail = email.trim().toLowerCase();
-      apiUpdateEmployee(employee.id, {
-        fullName: fullName.trim(),
-        email: cleanEmail,
-        phone,
-        departmentId,
-        designationId,
-        customDesignation: customDesignation.trim() || undefined,
-        employmentStatus,
-        employmentType,
-        shiftId,
-        password: resetPassword.trim() || undefined,
-        pinCode: pinCode || undefined,
-      }).catch((err) => console.warn('[API Update Employee Sync Error]:', err));
+      await syncWithBackend().catch(() => {});
 
-      if (resetPassword.trim()) {
-        apiUpdateEmployeePassword(employee.id, resetPassword.trim()).catch(() => {});
-      }
-      if (pinCode) {
-        apiUpdateEmployeePin(employee.id, pinCode, currentUser.role).catch(() => {});
-      }
-
-      onSuccess(`Successfully updated profile${resetPassword.trim() ? ', login password' : ''} & details for ${fullName}.`);
+      onSuccess(`Successfully saved ${cleanPassword ? 'profile, login password & ' : ''}all changes directly to MySQL database for ${cleanFullName}.`);
     } catch (err: any) {
       setErrorMsg(err.message || 'Update failed');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1373,48 +1406,80 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                 </div>
               )}
 
-              {/* Reset Portal Password (Admin Only) */}
+              {/* Portal Access, Role & Password Reset (Admin Only) */}
               {canManageEmployees && (
-                <div className="p-4 bg-[#faf9f5] rounded-xl border border-[#ece7dc] space-y-2">
+                <div className="p-4 bg-[#faf9f5] rounded-xl border border-[#ece7dc] space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <label className="block font-bold text-[#1c2120] flex items-center gap-1.5">
                         <Lock className="w-3.5 h-3.5 text-[#1b4332]" />
-                        <span>Reset Portal Login Password</span>
+                        <span>Portal Credentials, Role & Status</span>
                       </label>
                       <p className="text-[11px] text-[#717b77]">
-                        Assign a new web login password for this staff member. Leave blank to keep current password unchanged.
+                        Updates email, password, role, and login status directly in the MySQL database.
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type={showResetPassword ? 'text' : 'password'}
-                        value={resetPassword}
-                        onChange={(e) => setResetPassword(e.target.value)}
-                        placeholder="Leave blank to keep unchanged, or enter new password"
-                        className="w-full p-2.5 pr-10 border border-[#ded8cb] rounded-lg bg-white font-mono text-xs text-[#1c2120]"
-                      />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#1c2120] mb-1">System Role</label>
+                      <select
+                        value={role}
+                        onChange={(e) => setRole(e.target.value as RoleName)}
+                        className="w-full p-2 border border-[#ded8cb] rounded-lg bg-white text-xs"
+                      >
+                        <option value="employee">Employee (Standard Staff)</option>
+                        <option value="department_manager">Department Manager</option>
+                        <option value="finance_manager">Finance Manager</option>
+                        <option value="hr_admin">HR Administrator</option>
+                        <option value="super_admin">Super Admin</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#1c2120] mb-1">Portal Account Status</label>
+                      <select
+                        value={accountStatus}
+                        onChange={(e) => setAccountStatus(e.target.value as 'active' | 'suspended')}
+                        className="w-full p-2 border border-[#ded8cb] rounded-lg bg-white text-xs"
+                      >
+                        <option value="active">Active (Login Enabled)</option>
+                        <option value="suspended">Suspended (Login Blocked)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#1c2120] mb-1">
+                      New Login Password (leave blank to keep current password unchanged)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type={showResetPassword ? 'text' : 'password'}
+                          value={resetPassword}
+                          onChange={(e) => setResetPassword(e.target.value)}
+                          placeholder="Leave blank to keep unchanged, or enter new password"
+                          className="w-full p-2.5 pr-10 border border-[#ded8cb] rounded-lg bg-white font-mono text-xs text-[#1c2120]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowResetPassword(!showResetPassword)}
+                          className="absolute right-3 top-2.5 text-[#717b77] hover:text-[#1c2120] cursor-pointer"
+                          aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showResetPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => setShowResetPassword(!showResetPassword)}
-                        className="absolute right-3 top-2.5 text-[#717b77] hover:text-[#1c2120] cursor-pointer"
-                        aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => {
+                          setResetPassword('matra1234');
+                          setShowResetPassword(true);
+                        }}
+                        className="px-3 py-2.5 rounded-lg border border-[#ded8cb] bg-white hover:bg-[#f0ece1] text-[11px] font-semibold text-[#1c2120] whitespace-nowrap cursor-pointer"
                       >
-                        {showResetPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        Default: matra1234
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setResetPassword('matra1234');
-                        setShowResetPassword(true);
-                      }}
-                      className="px-3 py-2.5 rounded-lg border border-[#ded8cb] bg-white hover:bg-[#f0ece1] text-[11px] font-semibold text-[#1c2120] whitespace-nowrap cursor-pointer"
-                    >
-                      Default: matra1234
-                    </button>
                   </div>
                 </div>
               )}
@@ -1637,10 +1702,11 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] text-[#171c1b] font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                disabled={isSaving}
+                className="px-5 py-2 rounded-lg bg-[#CAA05C] hover:bg-[#ba904c] disabled:opacity-60 text-[#171c1b] font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <Save className="w-3.5 h-3.5 text-[#171c1b]" />
-                <span>Save All Changes</span>
+                <span>{isSaving ? 'Saving to Database...' : 'Save All Changes'}</span>
               </button>
             </div>
           </div>

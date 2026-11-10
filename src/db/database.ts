@@ -35,28 +35,8 @@ import {
   checkIsMissingPunch,
 } from '../utils/attendanceCalculator';
 import { calculateEmployeePayroll, EmployeeAttendanceAggregate } from '../utils/payrollCalculator';
-import {
-  SEED_AUDIT_LOGS,
-  SEED_DEPARTMENTS,
-  SEED_DESIGNATIONS,
-  SEED_EMPLOYEES,
-  SEED_LEAVE_BALANCES,
-  SEED_LEAVE_REQUESTS,
-  SEED_LEAVE_TYPES,
-  SEED_NOTIFICATIONS,
-  SEED_ORGANIZATION,
-  SEED_PAYROLL_POLICY,
-  SEED_PUNCH_EVENTS,
-  SEED_SALARY_ADVANCES,
-  SEED_SALARY_CONTRACTS,
-  SEED_SETTINGS,
-  SEED_SHIFTS,
-  SEED_USERS,
-  SEED_ATTENDANCE_SESSIONS,
-  SEED_CORRECTION_REQUESTS,
-} from './seedData';
 
-const STORAGE_KEY_PREFIX = 'studio_matra_db_v5_';
+const STORAGE_KEY_PREFIX = 'studio_matra_db_v6_';
 
 interface DatabaseSchema {
   organization: Organization;
@@ -192,32 +172,6 @@ class StudioMatraDatabase {
     };
   }
 
-  public getInitialSeed(): DatabaseSchema {
-    return {
-      organization: SEED_ORGANIZATION,
-      users: [...SEED_USERS],
-      departments: [...SEED_DEPARTMENTS],
-      designations: [...SEED_DESIGNATIONS],
-      employees: [...SEED_EMPLOYEES],
-      shifts: [...SEED_SHIFTS],
-      attendanceSessions: [...SEED_ATTENDANCE_SESSIONS],
-      punchEvents: [...SEED_PUNCH_EVENTS],
-      correctionRequests: [...SEED_CORRECTION_REQUESTS],
-      leaveTypes: [...SEED_LEAVE_TYPES],
-      leaveBalances: [...SEED_LEAVE_BALANCES],
-      leaveRequests: [...SEED_LEAVE_REQUESTS],
-      salaryContracts: [...SEED_SALARY_CONTRACTS],
-      salaryAdvances: [...SEED_SALARY_ADVANCES],
-      payrollPeriods: [],
-      payrollRuns: [],
-      payrollItems: [],
-      payrollPolicy: SEED_PAYROLL_POLICY,
-      settings: SEED_SETTINGS,
-      notifications: [...SEED_NOTIFICATIONS],
-      auditLogs: [...SEED_AUDIT_LOGS],
-    };
-  }
-
   private persist(state: DatabaseSchema) {
     if (typeof window !== 'undefined') {
       try {
@@ -242,8 +196,8 @@ class StudioMatraDatabase {
     };
   }
 
-  public resetToSeed() {
-    this.state = this.getInitialSeed();
+  public resetToEmpty() {
+    this.state = this.getEmptyState();
     this.notify();
   }
 
@@ -576,9 +530,39 @@ class StudioMatraDatabase {
     return newEmp;
   }
 
+  public upsertEmployee(emp: Employee): void {
+    if (!this.state.employees) this.state.employees = [];
+    const idx = this.state.employees.findIndex((e) => e.id === emp.id);
+    if (idx >= 0) {
+      this.state.employees[idx] = { ...this.state.employees[idx], ...emp };
+    } else {
+      this.state.employees.push(emp);
+    }
+    this.persist(this.state);
+    this.notify();
+  }
+
+  public upsertSalaryContract(contract: SalaryContract): void {
+    if (!this.state.salaryContracts) this.state.salaryContracts = [];
+    for (const c of this.state.salaryContracts) {
+      if (c.employeeId === contract.employeeId && c.status === 'active' && c.id !== contract.id) {
+        c.status = 'superseded';
+        c.effectiveTo = contract.effectiveFrom;
+      }
+    }
+    const idx = this.state.salaryContracts.findIndex((c) => c.id === contract.id);
+    if (idx >= 0) {
+      this.state.salaryContracts[idx] = { ...this.state.salaryContracts[idx], ...contract };
+    } else {
+      this.state.salaryContracts.push(contract);
+    }
+    this.persist(this.state);
+    this.notify();
+  }
+
   public updateEmployee(
     employeeId: string,
-    updates: Partial<Employee>,
+    updates: Partial<Employee> & { role?: RoleName; accountStatus?: 'active' | 'suspended' },
     actor: { userId: string; name: string }
   ) {
     const index = this.state.employees.findIndex((e) => e.id === employeeId);
@@ -593,6 +577,8 @@ class StudioMatraDatabase {
       if (user) {
         if (updates.email) user.email = updates.email.trim().toLowerCase();
         if (updates.fullName) user.fullName = updates.fullName.trim();
+        if (updates.role) user.role = updates.role;
+        if (updates.accountStatus) user.accountStatus = updates.accountStatus;
       }
 
       this.persist(this.state);

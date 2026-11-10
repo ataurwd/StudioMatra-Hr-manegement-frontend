@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { db } from '../db/database';
 import { DivisorMethod, Organization, PayrollPolicy, ShiftDefinition, User } from '../types';
-import { apiUpdateShift } from '../services/apiService';
+import { apiUpdateShift, syncWithBackend } from '../services/apiService';
 
 interface SettingsViewProps {
   currentUser: User;
@@ -234,14 +234,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser }) => {
     setTimeout(() => setSaveSuccess(''), 3000);
   };
 
-  const handleResetDatabase = () => {
-    if (
-      window.confirm(
-        'Are you sure you want to restore pristine initial Studio Matra demonstration data? All current changes will reset.'
-      )
-    ) {
-      db.resetToSeed();
-      window.location.reload();
+  const handleResetDatabase = async () => {
+    const ok = await syncWithBackend();
+    if (ok) {
+      setSaveSuccess('Synchronized 100% live records directly from MySQL database.');
+      setTimeout(() => setSaveSuccess(''), 3500);
+    } else {
+      alert('Unable to reach live backend database server.');
     }
   };
 
@@ -263,10 +262,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser }) => {
 
         <button
           onClick={handleResetDatabase}
-          className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-800 text-xs font-bold flex items-center gap-2 border border-red-200 transition-colors cursor-pointer"
+          className="px-4 py-2.5 rounded-xl bg-[#edf7f1] hover:bg-[#daf0e4] text-[#1b4332] text-xs font-bold flex items-center gap-2 border border-[#c2e8d3] transition-colors cursor-pointer"
         >
-          <RefreshCcw className="w-4 h-4 text-red-700" />
-          <span>Reset Demo Database</span>
+          <RefreshCcw className="w-4 h-4 text-[#1b4332]" />
+          <span>Sync Live Database</span>
         </button>
       </div>
 
