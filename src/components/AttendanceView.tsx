@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { db } from '../db/database';
+import { syncWithBackend } from '../services/apiService';
 import { AttendanceSession, Employee, RoleName, User } from '../types';
 import { formatMinutes } from '../utils/attendanceCalculator';
 import { canManageAttendance, hasPermission } from '../utils/permissions';
@@ -43,6 +44,13 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const currentEmp = db.getEmployeeByUserId(currentUser.id);
   const canManage = canManageAttendance(currentUser.role);
   const isDeptManager = currentUser.role === 'department_manager';
+
+  const [, setDbTick] = useState(0);
+  useEffect(() => {
+    const unsub = db.subscribe(() => setDbTick((t) => t + 1));
+    syncWithBackend().catch(() => {});
+    return unsub;
+  }, []);
 
   const [searchParams] = useSearchParams();
   const urlTab = searchParams.get('tab');

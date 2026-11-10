@@ -224,18 +224,19 @@ export const KioskModal: React.FC<KioskModalProps> = ({ isOpen, onClose }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, pin, selectedEmployee, activeSession, successResult]);
 
-  const handleKioskCheckIn = () => {
+  const handleKioskCheckIn = async () => {
     if (!selectedEmployee) return;
     try {
-      const { session } = db.checkIn({
-        employeeId: selectedEmployee.id,
-        sourceType: 'kiosk',
-        registeredDeviceId: 'SM-KIOSK-BANANI-01',
-        clientIp: '192.168.1.105',
-        actorUserId: selectedEmployee.userId,
-      });
-      // Synchronize directly with MySQL backend
-      apiCheckIn(selectedEmployee.id, 'kiosk').then(() => syncWithBackend()).catch(() => {});
+      const apiRes = await apiCheckIn(selectedEmployee.id, 'kiosk');
+      if (!apiRes.success || !apiRes.session) {
+        await syncWithBackend().catch(() => {});
+        setErrorMessage(apiRes.error || 'Failed to record kiosk check-in in database.');
+        return;
+      }
+
+      const session = apiRes.session;
+      db.upsertAttendanceSession(session);
+      await syncWithBackend().catch(() => {});
 
       setSuccessResult({
         action: 'check_in',
@@ -255,18 +256,19 @@ export const KioskModal: React.FC<KioskModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleKioskCheckOut = () => {
+  const handleKioskCheckOut = async () => {
     if (!selectedEmployee) return;
     try {
-      const { session } = db.checkOut({
-        employeeId: selectedEmployee.id,
-        sourceType: 'kiosk',
-        registeredDeviceId: 'SM-KIOSK-BANANI-01',
-        clientIp: '192.168.1.105',
-        actorUserId: selectedEmployee.userId,
-      });
-      // Synchronize directly with MySQL backend
-      apiCheckOut(selectedEmployee.id, 'kiosk').then(() => syncWithBackend()).catch(() => {});
+      const apiRes = await apiCheckOut(selectedEmployee.id, 'kiosk');
+      if (!apiRes.success || !apiRes.session) {
+        await syncWithBackend().catch(() => {});
+        setErrorMessage(apiRes.error || 'Failed to record kiosk check-out in database.');
+        return;
+      }
+
+      const session = apiRes.session;
+      db.upsertAttendanceSession(session);
+      await syncWithBackend().catch(() => {});
 
       setSuccessResult({
         action: 'check_out',

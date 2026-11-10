@@ -50,21 +50,24 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
   const [elapsedString, setElapsedString] = useState('0h 0m');
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
+  const [isPunching, setIsPunching] = useState(false);
 
   const refreshSessions = () => {
-    if (employee) {
-      setActiveSession(db.getActiveSession(employee.id) || null);
-      setTodaySession(db.getTodaySession(employee.id) || null);
+    const empId =
+      currentUser.employeeId || db.getEmployeeByUserId(currentUser.id)?.id;
+    if (empId) {
+      setActiveSession(db.getActiveSession(empId) || null);
+      setTodaySession(db.getTodaySession(empId) || null);
     }
     setDbTick((t) => t + 1);
   };
 
   useEffect(() => {
-    syncWithBackend().catch(() => {});
+    syncWithBackend().then(() => refreshSessions()).catch(() => {});
     refreshSessions();
     const unsub = db.subscribe(refreshSessions);
     return unsub;
-  }, [employee]);
+  }, [employee?.id]);
 
   // Live timer for active session
   useEffect(() => {
@@ -145,43 +148,61 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
       return;
     }
 
+    setIsPunching(true);
     try {
-      const { session } = db.checkIn({
-        employeeId: employee.id,
-        sourceType: 'office_network',
-        clientIp: '192.168.1.105',
-        actorUserId: currentUser.id,
-      });
-      // Synchronize directly with MySQL backend
-      apiCheckIn(employee.id, 'office_network').then(() => syncWithBackend()).catch(() => {});
+      // 1. Write directly to live MySQL backend FIRST and await confirmation
+      const apiRes = await apiCheckIn(employee.id, 'office_network');
+      if (!apiRes.success || !apiRes.session) {
+        await syncWithBackend().catch(() => {});
+        refreshSessions();
+        setActionError(apiRes.error || 'Failed to record check-in in database.');
+        return;
+      }
+
+      const liveSession = apiRes.session;
+      db.upsertAttendanceSession(liveSession);
+      setActiveSession(liveSession);
+      setTodaySession(liveSession);
       setActionSuccess(
-        `Checked in successfully at ${new Date(session.checkInAt).toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' })}. Status: ${session.computedStatus.toUpperCase()}.`
+        `Checked in successfully at ${new Date(liveSession.checkInAt).toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' })}. Status: ${liveSession.computedStatus.toUpperCase()}.`
       );
+      await syncWithBackend().catch(() => {});
       refreshSessions();
     } catch (err: any) {
       setActionError(err.message || 'Check-in failed');
+    } finally {
+      setIsPunching(false);
     }
   };
 
   const handleCheckOut = async () => {
     setActionError('');
     setActionSuccess('');
+    setIsPunching(true);
 
     try {
-      const { session } = db.checkOut({
-        employeeId: employee.id,
-        sourceType: 'office_network',
-        clientIp: '192.168.1.105',
-        actorUserId: currentUser.id,
-      });
-      // Synchronize directly with MySQL backend
-      apiCheckOut(employee.id, 'office_network').then(() => syncWithBackend()).catch(() => {});
+      // 1. Write directly to live MySQL backend FIRST and await confirmation
+      const apiRes = await apiCheckOut(employee.id, 'office_network');
+      if (!apiRes.success || !apiRes.session) {
+        await syncWithBackend().catch(() => {});
+        refreshSessions();
+        setActionError(apiRes.error || 'Failed to record check-out in database.');
+        return;
+      }
+
+      const liveSession = apiRes.session;
+      db.upsertAttendanceSession(liveSession);
+      setActiveSession(null);
+      setTodaySession(liveSession);
       setActionSuccess(
-        `Checked out successfully! Total worked: ${formatMinutes(session.workedMinutes)} (${session.breakMinutes}m lunch break deducted). Status: ${session.computedStatus.toUpperCase()}.`
+        `Checked out successfully! Total worked: ${formatMinutes(liveSession.workedMinutes)} (${liveSession.breakMinutes}m lunch break deducted). Status: ${liveSession.computedStatus.toUpperCase()}.`
       );
+      await syncWithBackend().catch(() => {});
       refreshSessions();
     } catch (err: any) {
       setActionError(err.message || 'Check-out failed');
+    } finally {
+      setIsPunching(false);
     }
   };
 
@@ -206,7 +227,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
           </div>
           <h1 className="text-2xl font-serif font-bold text-[#1a201e]">Welcome, {employee.fullName}</h1>
           <p className="text-xs text-[#66706c] mt-0.5">
-            <strong className="text-[#CAA05C] font-semibold">{desTitle}</strong> • Shift: {shift.name} ({shift.startTime} – {shift.endTime})
+            <strong className="text-[#CAA05C] font-semibold">{desTitle}</strong> • Shift: {shift?.name || 'Studio General Shift'} ({shift?.startTime || '10:15'} – {shift?.endTime || '19:30'})
           </p>
         </div>
 
@@ -333,21 +354,28 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
 
           {/* Check In / Out Main CTA */}
           <div className="flex flex-col sm:flex-row items-center gap-3">
-            {!activeSession ? (
-              <button
-                onClick={handleCheckIn}
-                className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] active:bg-[#a67e3a] text-[#171c1b] font-bold text-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm active:scale-98"
-              >
-                <LogIn className="w-5 h-5 text-[#171c1b]" />
-                <span>OFFICE CHECK IN</span>
-              </button>
-            ) : (
+            {activeSession ? (
               <button
                 onClick={handleCheckOut}
-                className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-xl bg-[#92400e] hover:bg-[#b45309] active:bg-[#d97706] text-white font-bold text-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm active:scale-98"
+                disabled={isPunching}
+                className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-xl bg-[#92400e] hover:bg-[#b45309] active:bg-[#d97706] disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm active:scale-98"
               >
                 <LogOut className="w-5 h-5 text-amber-200" />
-                <span>OFFICE CHECK OUT</span>
+                <span>{isPunching ? 'RECORDING CHECK OUT...' : 'OFFICE CHECK OUT'}</span>
+              </button>
+            ) : todaySession?.checkOutAt ? (
+              <div className="w-full py-3.5 px-6 rounded-xl bg-[#edf7f1] border border-[#c2e8d3] text-[#1b4332] font-bold text-sm flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <span>Today&apos;s Attendance Completed & Recorded in Database</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleCheckIn}
+                disabled={isPunching}
+                className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-xl bg-[#CAA05C] hover:bg-[#ba904c] active:bg-[#a67e3a] disabled:opacity-60 text-[#171c1b] font-bold text-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm active:scale-98"
+              >
+                <LogIn className="w-5 h-5 text-[#171c1b]" />
+                <span>{isPunching ? 'RECORDING CHECK IN...' : 'OFFICE CHECK IN'}</span>
               </button>
             )}
           </div>

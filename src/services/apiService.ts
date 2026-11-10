@@ -131,30 +131,36 @@ export async function apiChangePassword(userId: string, currentPassword: string,
 }
 
 // --- Attendance & Kiosk ---
-export async function apiCheckIn(employeeId: string, sourceType?: string): Promise<any> {
-  try {
-    const res = await fetch(`${API_BASE}/attendance/check-in`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId, sourceType: sourceType || 'office_network' }),
-    });
-    return await res.json();
-  } catch {
-    return null;
-  }
+export async function apiCheckIn(
+  employeeId: string,
+  sourceType?: string
+): Promise<{ success: boolean; error?: string; session?: any }> {
+  const res = await safeJsonRequest(`${API_BASE}/attendance/check-in`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employeeId, sourceType: sourceType || 'office_network' }),
+  });
+  return {
+    success: res.success,
+    error: res.error,
+    session: res.data?.id ? res.data : res.data?.session,
+  };
 }
 
-export async function apiCheckOut(employeeId: string, sourceType?: string): Promise<any> {
-  try {
-    const res = await fetch(`${API_BASE}/attendance/check-out`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId, sourceType: sourceType || 'office_network' }),
-    });
-    return await res.json();
-  } catch {
-    return null;
-  }
+export async function apiCheckOut(
+  employeeId: string,
+  sourceType?: string
+): Promise<{ success: boolean; error?: string; session?: any }> {
+  const res = await safeJsonRequest(`${API_BASE}/attendance/check-out`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employeeId, sourceType: sourceType || 'office_network' }),
+  });
+  return {
+    success: res.success,
+    error: res.error,
+    session: res.data?.id ? res.data : res.data?.session,
+  };
 }
 
 export async function apiKioskPunch(pin: string, mode?: 'check_in' | 'check_out', deviceId?: string, loggedInUserId?: string): Promise<any> {

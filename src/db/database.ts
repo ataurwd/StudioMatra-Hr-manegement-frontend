@@ -719,6 +719,21 @@ class StudioMatraDatabase {
     return this.state.punchEvents;
   }
 
+  public upsertAttendanceSession(session: AttendanceSession): void {
+    if (!this.state.attendanceSessions) this.state.attendanceSessions = [];
+    const idx = this.state.attendanceSessions.findIndex(
+      (s) =>
+        s.id === session.id ||
+        (s.employeeId === session.employeeId && s.attendanceDate === session.attendanceDate)
+    );
+    if (idx >= 0) {
+      this.state.attendanceSessions[idx] = session;
+    } else {
+      this.state.attendanceSessions.unshift(session);
+    }
+    this.notify();
+  }
+
   /**
    * Check In Workflow (Server Authoritative)
    */

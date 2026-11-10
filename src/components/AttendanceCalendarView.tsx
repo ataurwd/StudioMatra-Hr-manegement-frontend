@@ -71,6 +71,24 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
   const [activeEmployeeId, setActiveEmployeeId] = useState<string>(defaultEmpId);
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
+  // Subscribe to live database mutations (Check-In, Check-Out, Kiosk, DB Sync)
+  useEffect(() => {
+    const unsub = db.subscribe(() => {
+      setRefreshKey((k) => k + 1);
+      setActiveEmployeeId((prev) => {
+        if (prev) return prev;
+        return (
+          employeeId ||
+          currentUser.employeeId ||
+          db.getEmployeeByUserId(currentUser.id)?.id ||
+          db.getEmployees()[0]?.id ||
+          ''
+        );
+      });
+    });
+    return unsub;
+  }, [employeeId, currentUser.id, currentUser.employeeId]);
+
   // Sync activeEmployeeId if prop changes
   useEffect(() => {
     if (employeeId && employeeId !== activeEmployeeId) {
@@ -210,7 +228,7 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
 
         if (session.workedMinutes > 0) {
           workedMinutesFormatted = formatMinutes(session.workedMinutes);
-        } else if (session.isMissingPunch) {
+        } else if (session.isMissingPunch && !isToday) {
           workedMinutesFormatted = formatMinutes(session.scheduledMinutes || 480);
         } else if (isToday && session.checkInAt && !session.checkOutAt) {
           const start = new Date(session.checkInAt).getTime();
@@ -218,7 +236,7 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
           workedMinutesFormatted = formatMinutes(diffMin);
         }
 
-        if (session.isMissingPunch) {
+        if (session.isMissingPunch && !isToday) {
           computedCategory = 'missing';
         } else if (session.computedStatus === 'late') {
           computedCategory = 'late';
